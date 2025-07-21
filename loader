@@ -3,7 +3,7 @@ if not game:IsLoaded() then
 end
 
 if game.PlaceId == 72829404259339 then
-    local scriptSource = game:HttpGet("https://raw.githubusercontent.com/BloxBanter/Lix-Hub/refs/heads/main/LixHub_ARX")
+    local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_ARX")
     local func, err = loadstring(scriptSource)
     if func then
         func()  -- Execute the loaded function
