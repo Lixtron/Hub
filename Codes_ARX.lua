@@ -66,7 +66,7 @@ local codes = {
 
 local function redeemCode(code)
     local success, error = pcall(function()
-        Services.ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Lobby"):WaitForChild("Code"):FireServer(code)
+        game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Lobby"):WaitForChild("Code"):FireServer(code)
     end)
     
     if success then
