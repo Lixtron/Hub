@@ -56,7 +56,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 local function updateText()
-	textLabel.Text = "Boros Pity: " .. tostring(borusPity.Value) .. "/25000"
+	label.Text = "Boros Pity: " .. tostring(borusPity.Value) .. "/25000"
 end
 
 updateText()
