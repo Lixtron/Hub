@@ -1,5 +1,7 @@
 --updated 24/08/25
 local codes = {
+    "FixPatchSJW!",
+    "SorryForPassiveDelay!",
     "SoloPeakLeveling!",
     "NewRaidAndEvos?!",
     "IgrisIsMetaAgain!!",
