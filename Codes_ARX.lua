@@ -1,5 +1,9 @@
 --updated 24/08/25
 local codes = {
+    "SoloPeakLeveling!",
+    "NewRaidAndEvos?!",
+    "IgrisIsMetaAgain!!",
+    "SorryForAllTheIssues!",
     "TYFORTHESUPPORT!?",
     "FallEvent?!",
     "SorryForLate!",
