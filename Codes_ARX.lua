@@ -1,5 +1,11 @@
---updated 02/09/25
+--updated 08/09/25
 local codes = {
+    "FairyTalePeak!",
+    "6.5UpdateIsReal!!!",
+    "FallPart2!?!",
+    "Sorry4Delay",
+    "ReallySorry4Delay",
+    "FollowUpTheInsta!",
     "FixPatchSJW!",
     "SorryForPassiveDelay!",
     "SoloPeakLeveling!",
