@@ -1,5 +1,6 @@
 --updated 09/09/25
 local codes = {
+    "FairyPatch67",
     "CelestialMageOp67",
     "FairyTalePeak!",
     "6.5UpdateIsReal!!!",
