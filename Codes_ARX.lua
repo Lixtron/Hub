@@ -1,5 +1,6 @@
---updated 09/09/25
+--updated 10/09/25
 local codes = {
+    "CyclopsSoulMine!",
     "FairyPatch67",
     "CelestialMageOp67",
     "FairyTalePeak!",
