@@ -1,5 +1,9 @@
---updated 10/09/25
+--updated 21/09/25
 local codes = {
+    "FollowUpTheIG!!!",
+    "Goodbye6.7Update",
+    "Update7!!",
+    "FinallyFate!",
     "CyclopsSoulMine!",
     "FairyPatch67",
     "CelestialMageOp67",
