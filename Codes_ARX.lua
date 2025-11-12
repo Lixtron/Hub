@@ -1,4 +1,8 @@
 local codes = {
+    "DraculaIsHere",
+    "SorryForDelays!!",
+    "KoromuBossEvent",
+    "HappyExtraLateHalloween!",
     "JoJoUpdate7.6!",
     "NewRarity!",
     "WAdamAndThePlanners",
