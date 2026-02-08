@@ -51,6 +51,14 @@ elseif game.PlaceId == 133410800847665 or game.PlaceId == 106402284955512 or gam
     else
         warn("Loadstring error: " .. tostring(err))
     end
+elseif game.PlaceId == 85661754644506 or game.PlaceId == 76806550943352 then
+    local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AP.lua")
+    local func, err = loadstring(scriptSource)
+    if func then
+        func()
+    else
+        warn("Loadstring error: " .. tostring(err))
+    end
 else
     warn("PlaceId mismatch, script not loaded.")
 end
