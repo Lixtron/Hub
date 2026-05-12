@@ -1,7 +1,6 @@
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-
 if game.PlaceId == 111446873000464 then
     local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_ARX")
     local func, err = loadstring(scriptSource)
@@ -10,7 +9,6 @@ if game.PlaceId == 111446873000464 then
     else
         warn("Loadstring error: " .. tostring(err))
     end
-
 elseif game.PlaceId == 108533757090220 or game.PlaceId == 123516946198836 then
     local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_GTD.lua")
     local func, err = loadstring(scriptSource)
@@ -69,6 +67,14 @@ elseif game.PlaceId == 90738171169572 then
     end
 elseif game.PlaceId == 126297188712308 or game.PlaceId == 80353351682367 then
     local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AO.lua")
+    local func, err = loadstring(scriptSource)
+    if func then
+        func()
+    else
+        warn("Loadstring error: " .. tostring(err))
+    end
+elseif game.PlaceId == 14916516914 or game.PlaceId == 13379349730 or game.PlaceId == 14012874501 or game.PlaceId == 13904207646 or game.PlaceId == 14638336319 or game.PlaceId == 15220308770 or game.PlaceId == 17688739434 or game.PlaceId == 15824912319 or game.PlaceId == 126678335159530 then
+    local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AOTR.lua")
     local func, err = loadstring(scriptSource)
     if func then
         func()
