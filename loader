@@ -73,7 +73,7 @@ elseif game.PlaceId == 126297188712308 or game.PlaceId == 80353351682367 then
     else
         warn("Loadstring error: " .. tostring(err))
     end
-elseif game.PlaceId == 14916516914 or game.PlaceId == 13379349730 or game.PlaceId == 14012874501 or game.PlaceId == 13904207646 or game.PlaceId == 14638336319 or game.PlaceId == 15220308770 or game.PlaceId == 17688739434 or game.PlaceId == 15824912319 or game.PlaceId == 126678335159530 then
+elseif game.PlaceId == 14916516914 or game.PlaceId == 13379349730 or game.PlaceId == 14012874501 or game.PlaceId == 13904207646 or game.PlaceId == 14638336319 or game.PlaceId == 15220308770 or game.PlaceId == 17688739434 or game.PlaceId == 15824912319 or game.PlaceId == 126678335159530 or game.PlaceId == 13379208636 then
     local scriptSource = game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AOTR.lua")
     local func, err = loadstring(scriptSource)
     if func then
