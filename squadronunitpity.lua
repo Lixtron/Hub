@@ -29,6 +29,11 @@ return {
         Limit = 100,
     },
 
+    ["freezer"] = {
+        Name = "Freezer",
+        Limit = 100,
+    },
+
     ["shanron"] = {
         Name = "Shanron",
         Limit = 400,
