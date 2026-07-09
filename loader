@@ -13,6 +13,7 @@ local scripts = {
     [33861560] = "LixHub_UTD.lua",
     [33912907] = "LixHub_AO.lua",
     [9190691] = "LixHub_AS.lua",
+    [17347863] = "LixHub_AOTR.lua",
 }
 
 local file = scripts[game.CreatorId]
