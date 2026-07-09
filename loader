@@ -2,45 +2,39 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
+if getgenv().LixHubLoaded then return end
+getgenv().LixHubLoaded = true
+
+local StarterGui = game:GetService("StarterGui")
+
 local scripts = {
-    [111446873000464] = "LixHub_ARX",
-
-    [108533757090220] = "LixHub_GTD.lua",
-    [123516946198836] = "LixHub_GTD.lua",
-
-    [17282336195] = "LixHub_AG.lua",
-    [17400753636] = "LixHub_AG.lua",
-
-    [107573139811370] = "LixHub_AC.lua",
-    [72115712027203] = "LixHub_AC.lua",
-
-    [17899227840] = "LixHub_AUV.lua",
-    [133424448378099] = "LixHub_AUV.lua",
-
-    [133410800847665] = "LixHub_UTD.lua",
-    [106402284955512] = "LixHub_UTD.lua",
-    [100391355714091] = "LixHub_UTD.lua",
-
-    [85661754644506] = "LixHub_AP.lua",
-    [76806550943352] = "LixHub_AP.lua",
-
-    [90738171169572] = "LixHub_ATS.lua",
-
-    [126297188712308] = "LixHub_AO.lua",
-    [80353351682367] = "LixHub_AO.lua",
-
-    [91255392593879] = "LixHub_AS.lua",
-    [71132543521245] = "LixHub_AS.lua",
+    [15009415] = "LixHub_ARX",
+    [10749844] = "LixHub_AG.lua",
+    [33861560] = "LixHub_UTD.lua",
+    [33912907] = "LixHub_AO.lua",
+    [9190691] = "LixHub_AS.lua",
 }
 
-local file = scripts[game.PlaceId] or "LixHub_AOTR.lua"
-local url = "https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/" .. file
+local file = scripts[game.CreatorId]
 
-local scriptSource = game:HttpGet(url)
-local func, err = loadstring(scriptSource)
+if not file then
+    getgenv().LixHubLoaded = nil
 
-if func then
-    func()
-else
-    warn("Loadstring error: " .. tostring(err))
+    StarterGui:SetCore("SendNotification", {
+        Title = "LixHub",
+        Text = "Game not supported",
+        Duration = 5,
+    })
+
+    return
 end
+
+StarterGui:SetCore("SendNotification", {
+    Title = "LixHub",
+    Text = "Script loading...",
+    Duration = 5,
+})
+
+loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/" .. file
+))()
