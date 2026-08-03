@@ -17,7 +17,7 @@ local scripts = {
 	[33912907] = "https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AO.lua",
 	[9190691] = "https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AS.lua",
 	[17347863] = "https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AOTR.lua",
-	[35929511] = "https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/LixHub_AE.lua",
+	[35929511] = "https://api.luarmor.net/files/v4/loaders/ed4e6fa2c50ca4ea890bedf40fc647f2.lua",
 }
 
 local url = scripts[game.CreatorId]
