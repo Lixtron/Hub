@@ -1888,9 +1888,47 @@ function MacLib:Window(Settings)
 			local elementsScrollingUIListLayout = Instance.new("UIListLayout")
 			elementsScrollingUIListLayout.Name = "ElementsScrollingUIListLayout"
 			elementsScrollingUIListLayout.Padding = UDim.new(0, 15)
-			elementsScrollingUIListLayout.FillDirection = Enum.FillDirection.Horizontal
+			elementsScrollingUIListLayout.FillDirection = Enum.FillDirection.Vertical
 			elementsScrollingUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 			elementsScrollingUIListLayout.Parent = elementsScrolling
+
+			local center = Instance.new("Frame")
+			center.Name = "Center"
+			center.AutomaticSize = Enum.AutomaticSize.Y
+			center.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			center.BackgroundTransparency = 1
+			center.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			center.BorderSizePixel = 0
+			center.LayoutOrder = 0
+			center.Size = UDim2.new(1, 0, 0, 0)
+			center.Visible = false
+
+			local centerUIListLayout = Instance.new("UIListLayout")
+			centerUIListLayout.Name = "CenterUIListLayout"
+			centerUIListLayout.Padding = UDim.new(0, 15)
+			centerUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			centerUIListLayout.Parent = center
+
+			center.Parent = elementsScrolling
+
+			local sidesContainer = Instance.new("Frame")
+			sidesContainer.Name = "SidesContainer"
+			sidesContainer.AutomaticSize = Enum.AutomaticSize.Y
+			sidesContainer.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			sidesContainer.BackgroundTransparency = 1
+			sidesContainer.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			sidesContainer.BorderSizePixel = 0
+			sidesContainer.LayoutOrder = 1
+			sidesContainer.Size = UDim2.new(1, 0, 0, 0)
+
+			local sidesContainerUIListLayout = Instance.new("UIListLayout")
+			sidesContainerUIListLayout.Name = "SidesContainerUIListLayout"
+			sidesContainerUIListLayout.Padding = UDim.new(0, 10)
+			sidesContainerUIListLayout.FillDirection = Enum.FillDirection.Horizontal
+			sidesContainerUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			sidesContainerUIListLayout.Parent = sidesContainer
+
+			sidesContainer.Parent = elementsScrolling
 
 			local left = Instance.new("Frame")
 			left.Name = "Left"
@@ -1899,8 +1937,8 @@ function MacLib:Window(Settings)
 			left.BackgroundTransparency = 1
 			left.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			left.BorderSizePixel = 0
-			left.Position = UDim2.fromScale(0.512, 0)
-			left.Size = UDim2.new(0.5, -10, 0, 0)
+			left.LayoutOrder = 0
+			left.Size = UDim2.new(0.5, -5, 0, 0)
 
 			local leftUIListLayout = Instance.new("UIListLayout")
 			leftUIListLayout.Name = "LeftUIListLayout"
@@ -1908,7 +1946,7 @@ function MacLib:Window(Settings)
 			leftUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 			leftUIListLayout.Parent = left
 
-			left.Parent = elementsScrolling
+			left.Parent = sidesContainer
 
 			local right = Instance.new("Frame")
 			right.Name = "Right"
@@ -1918,8 +1956,7 @@ function MacLib:Window(Settings)
 			right.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			right.BorderSizePixel = 0
 			right.LayoutOrder = 1
-			right.Position = UDim2.fromScale(0.512, 0)
-			right.Size = UDim2.new(0.5, -10, 0, 0)
+			right.Size = UDim2.new(0.5, -5, 0, 0)
 
 			local rightUIListLayout = Instance.new("UIListLayout")
 			rightUIListLayout.Name = "RightUIListLayout"
@@ -1927,7 +1964,26 @@ function MacLib:Window(Settings)
 			rightUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 			rightUIListLayout.Parent = right
 
-			right.Parent = elementsScrolling
+			right.Parent = sidesContainer
+
+			local bottom = Instance.new("Frame")
+			bottom.Name = "Bottom"
+			bottom.AutomaticSize = Enum.AutomaticSize.Y
+			bottom.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			bottom.BackgroundTransparency = 1
+			bottom.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			bottom.BorderSizePixel = 0
+			bottom.LayoutOrder = 2
+			bottom.Size = UDim2.new(1, 0, 0, 0)
+			bottom.Visible = false
+
+			local bottomUIListLayout = Instance.new("UIListLayout")
+			bottomUIListLayout.Name = "BottomUIListLayout"
+			bottomUIListLayout.Padding = UDim.new(0, 15)
+			bottomUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			bottomUIListLayout.Parent = bottom
+
+			bottom.Parent = elementsScrolling
 
 			elementsScrolling.Parent = elements1
 
@@ -1945,7 +2001,19 @@ function MacLib:Window(Settings)
 				section.Position = UDim2.fromScale(0, 6.78e-08)
 				section.Size = UDim2.fromScale(1, 0)
 				section.ClipsDescendants = true
-				section.Parent = Settings.Side == "Left" and left or right
+				if Settings.Side == "Left" then
+					section.Parent = left
+				elseif Settings.Side == "Right" then
+					section.Parent = right
+				elseif Settings.Side == "Center" then
+					center.Visible = true
+					section.Parent = center
+				elseif Settings.Side == "Bottom" then
+					bottom.Visible = true
+					section.Parent = bottom
+				else
+					section.Parent = left
+				end
 
 				local sectionUICorner = Instance.new("UICorner")
 				sectionUICorner.Name = "SectionUICorner"
