@@ -15,7 +15,6 @@ local MacLib = {
 	end
 }
 
---// Services
 local TweenService = MacLib.GetService("TweenService")
 local RunService = MacLib.GetService("RunService")
 local HttpService = MacLib.GetService("HttpService")
@@ -24,7 +23,6 @@ local UserInputService = MacLib.GetService("UserInputService")
 local Lighting = MacLib.GetService("Lighting")
 local Players = MacLib.GetService("Players")
 
---// Variables
 local isStudio = RunService:IsStudio()
 local LocalPlayer = Players.LocalPlayer
 
@@ -63,7 +61,6 @@ local assets = {
 	sliderhead = "rbxassetid://18772834246",
 }
 
---// Functions
 local function GetGui()
 	local newGui = Instance.new("ScreenGui")
 	newGui.ScreenInsets = Enum.ScreenInsets.None
@@ -138,7 +135,6 @@ local function Tween(instance, tweeninfo, propertytable)
 	return TweenService:Create(instance, tweeninfo, propertytable)
 end
 
---// Library Functions
 function MacLib:Window(Settings)
 	local WindowFunctions = {Settings = Settings}
 	if Settings.AcrylicBlur ~= nil then
@@ -561,7 +557,6 @@ function MacLib:Window(Settings)
 	informationGroupUIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	informationGroupUIListLayout.Parent = informationGroup
 
-	-- LixHub Logo (circle)
 	local lixLogo = Instance.new("ImageLabel")
 	lixLogo.Name = "LixLogo"
 	lixLogo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -594,7 +589,6 @@ function MacLib:Window(Settings)
 	userAndDisplayFrame.LayoutOrder = 1
 	userAndDisplayFrame.Size = UDim2.new(1, -54, 0, 44)
 
-	-- LixHub name label
 	local displayName = Instance.new("TextLabel")
 	displayName.Name = "DisplayName"
 	displayName.FontFace = Font.new(
@@ -629,7 +623,6 @@ function MacLib:Window(Settings)
 	userAndDisplayFrameUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	userAndDisplayFrameUIListLayout.Parent = userAndDisplayFrame
 
-	-- Discord link label
 	local username = Instance.new("TextLabel")
 	username.Name = "Username"
 	username.FontFace = Font.new(
@@ -653,7 +646,6 @@ function MacLib:Window(Settings)
 	username.Parent = userAndDisplayFrame
 	username.Size = UDim2.fromScale(1, 0)
 
-	-- [FREE] green label (replaces key timer)
 	local keyTimerLabel = Instance.new("TextLabel")
 	keyTimerLabel.Name = "KeyTimerLabel"
 	keyTimerLabel.FontFace = Font.new(
@@ -932,7 +924,6 @@ function MacLib:Window(Settings)
 			end
 		end)
 	else
-		-- DragStyle == 2 or unset: whole window is draggable
 		base.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				onDragStart(input)
@@ -976,7 +967,6 @@ function MacLib:Window(Settings)
 	currentTab.Size = UDim2.fromScale(0.9, 0)
 	currentTab.Parent = elements
 
-	--// Search bar
 	local searchContainer = Instance.new("Frame")
 	searchContainer.Name = "SearchContainer"
 	searchContainer.AnchorPoint = Vector2.new(1, 0.5)
@@ -1025,7 +1015,6 @@ function MacLib:Window(Settings)
 	searchInput.Size = UDim2.new(1, -33, 1, 0)
 	searchInput.Parent = searchContainer
 
-	--// Search results dropdown
 	local searchResults = Instance.new("Frame")
 	searchResults.Name = "SearchResults"
 	searchResults.AnchorPoint = Vector2.new(1, 0)
@@ -1073,7 +1062,6 @@ function MacLib:Window(Settings)
 	searchEmptyLabel.Visible = false
 	searchEmptyLabel.Parent = searchResults
 
-	--// Search logic
 	local activeFlashId = 0
 	local flashHighlights = {}
 
@@ -1107,6 +1095,8 @@ function MacLib:Window(Settings)
 		if entry.tabSelectFunc then
 			entry.tabSelectFunc()
 		end
+		local revealed = entry.revealFunc and entry.revealFunc()
+		if revealed then task.wait() end
 		if entry.scrollFrame and entry.element then
 			task.wait()
 			local elem = entry.element
@@ -1757,7 +1747,6 @@ function MacLib:Window(Settings)
 		function SectionFunctions:Tab(Settings)
 			local TabFunctions = {Settings = Settings}
 
-			-- Shared context for search registry; populated once SelectCurrentTab is defined below
 			local tabContext = { name = Settings.Name, selectFunc = nil, scrollFrame = nil }
 
 			local tabSwitcher = Instance.new("TextButton")
@@ -1990,47 +1979,50 @@ function MacLib:Window(Settings)
 			tabContext.scrollFrame = elementsScrolling
 
 			function TabFunctions:Section(Settings)
-				local SectionFunctions = {}
-				local section = Instance.new("Frame")
-				section.Name = "Section"
-				section.AutomaticSize = Enum.AutomaticSize.Y
-				section.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				section.BackgroundTransparency = 0.98
-				section.BorderColor3 = Color3.fromRGB(0, 0, 0)
-				section.BorderSizePixel = 0
-				section.Position = UDim2.fromScale(0, 6.78e-08)
-				section.Size = UDim2.fromScale(1, 0)
-				section.ClipsDescendants = true
+				Settings = Settings or {}
+				local SectionFunctions = { Settings = Settings }
+				local sectionTitle = tostring(Settings.Name or Settings.Title or "Section")
+				local sectionOuter = Instance.new("Frame")
+				sectionOuter.Name = "Section"
+				sectionOuter.AutomaticSize = Enum.AutomaticSize.Y
+				sectionOuter.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				sectionOuter.BackgroundTransparency = 0.98
+				sectionOuter.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				sectionOuter.BorderSizePixel = 0
+				sectionOuter.Position = UDim2.fromScale(0, 6.78e-08)
+				sectionOuter.Size = UDim2.fromScale(1, 0)
+				sectionOuter.ClipsDescendants = true
+
 				if Settings.Side == "Left" then
-					section.Parent = left
+					sectionOuter.Parent = left
 				elseif Settings.Side == "Right" then
-					section.Parent = right
+					sectionOuter.Parent = right
 				elseif Settings.Side == "Center" then
 					center.Visible = true
-					section.Parent = center
+					sectionOuter.Parent = center
 				elseif Settings.Side == "Bottom" then
 					bottom.Visible = true
-					section.Parent = bottom
+					sectionOuter.Parent = bottom
 				else
-					section.Parent = left
+					sectionOuter.Parent = left
 				end
 
 				local sectionUICorner = Instance.new("UICorner")
 				sectionUICorner.Name = "SectionUICorner"
-				sectionUICorner.Parent = section
+				sectionUICorner.Parent = sectionOuter
 
 				local sectionUIStroke = Instance.new("UIStroke")
 				sectionUIStroke.Name = "SectionUIStroke"
 				sectionUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 				sectionUIStroke.Color = Color3.fromRGB(255, 255, 255)
 				sectionUIStroke.Transparency = 0.95
-				sectionUIStroke.Parent = section
+				sectionUIStroke.Parent = sectionOuter
 
-				local sectionUIListLayout = Instance.new("UIListLayout")
-				sectionUIListLayout.Name = "SectionUIListLayout"
-				sectionUIListLayout.Padding = UDim.new(0, 10)
-				sectionUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-				sectionUIListLayout.Parent = section
+				local sectionOuterLayout = Instance.new("UIListLayout")
+				sectionOuterLayout.Name = "SectionUIListLayout"
+				sectionOuterLayout.Padding = UDim.new(0, 10)
+				sectionOuterLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				sectionOuterLayout.Parent = sectionOuter
 
 				local sectionUIPadding = Instance.new("UIPadding")
 				sectionUIPadding.Name = "SectionUIPadding"
@@ -2038,9 +2030,109 @@ function MacLib:Window(Settings)
 				sectionUIPadding.PaddingLeft = UDim.new(0, 20)
 				sectionUIPadding.PaddingRight = UDim.new(0, 18)
 				sectionUIPadding.PaddingTop = UDim.new(0, 22)
-				sectionUIPadding.Parent = section
+				sectionUIPadding.Parent = sectionOuter
 
-				-- Registers a named element with the global search registry
+				local section = sectionOuter
+				local collapsed = false
+				local revealForSearch = nil
+
+				if Settings.Collapsible then
+					local sectionHeader = Instance.new("TextButton")
+					sectionHeader.Name = "SectionHeader"
+					sectionHeader.Text = ""
+					sectionHeader.AutoButtonColor = false
+					sectionHeader.BackgroundTransparency = 1
+					sectionHeader.BorderSizePixel = 0
+					sectionHeader.Size = UDim2.new(1, 0, 0, 24)
+					sectionHeader.LayoutOrder = -1
+					sectionHeader.Parent = sectionOuter
+
+					local sectionHeaderTitle = Instance.new("TextLabel")
+					sectionHeaderTitle.Name = "SectionHeaderTitle"
+					sectionHeaderTitle.FontFace = Font.new(assets.interFont, Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+					sectionHeaderTitle.Text = sectionTitle
+					sectionHeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+					sectionHeaderTitle.TextSize = 14
+					sectionHeaderTitle.TextTransparency = 0.35
+					sectionHeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+					sectionHeaderTitle.BackgroundTransparency = 1
+					sectionHeaderTitle.BorderSizePixel = 0
+					sectionHeaderTitle.Size = UDim2.new(1, -28, 1, 0)
+					sectionHeaderTitle.Parent = sectionHeader
+
+					local sectionArrow = Instance.new("TextLabel")
+					sectionArrow.Name = "SectionArrow"
+					sectionArrow.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+					sectionArrow.Text = ">"
+					sectionArrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+					sectionArrow.TextSize = 16
+					sectionArrow.TextTransparency = 0.35
+					sectionArrow.TextXAlignment = Enum.TextXAlignment.Right
+					sectionArrow.BackgroundTransparency = 1
+					sectionArrow.BorderSizePixel = 0
+					sectionArrow.Position = UDim2.new(1, -18, 0, 0)
+					sectionArrow.Size = UDim2.fromOffset(18, 24)
+					sectionArrow.Parent = sectionHeader
+
+					section = Instance.new("Frame")
+					section.Name = "SectionContent"
+					section.AutomaticSize = Enum.AutomaticSize.Y
+					section.BackgroundTransparency = 1
+					section.BorderSizePixel = 0
+					section.Size = UDim2.new(1, 0, 0, 0)
+					section.LayoutOrder = 0
+					section.Parent = sectionOuter
+
+					local sectionContentLayout = Instance.new("UIListLayout")
+					sectionContentLayout.Name = "SectionContentLayout"
+					sectionContentLayout.Padding = UDim.new(0, 10)
+					sectionContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					sectionContentLayout.Parent = section
+
+					local function applyCollapsed(state, animated)
+						collapsed = state == true
+						section.Visible = not collapsed
+						local rotation = collapsed and 0 or 90
+						if animated then
+							Tween(sectionArrow, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+								Rotation = rotation,
+							}):Play()
+						else
+							sectionArrow.Rotation = rotation
+						end
+					end
+
+					sectionHeader.MouseEnter:Connect(function()
+						sectionHeaderTitle.TextTransparency = 0.15
+						sectionArrow.TextTransparency = 0.15
+					end)
+					sectionHeader.MouseLeave:Connect(function()
+						sectionHeaderTitle.TextTransparency = 0.35
+						sectionArrow.TextTransparency = 0.35
+					end)
+					sectionHeader.MouseButton1Click:Connect(function()
+						applyCollapsed(not collapsed, true)
+					end)
+
+					function SectionFunctions:SetCollapsed(state)
+						applyCollapsed(state, true)
+					end
+					function SectionFunctions:GetCollapsed()
+						return collapsed
+					end
+					function SectionFunctions:UpdateName(name)
+						sectionTitle = tostring(name or "Section")
+						sectionHeaderTitle.Text = sectionTitle
+					end
+
+					revealForSearch = function()
+						local wasCollapsed = collapsed
+						if wasCollapsed then applyCollapsed(false, false) end
+						return wasCollapsed
+					end
+					applyCollapsed(Settings.Collapsed == true, false)
+				end
+
 				local function registerElement(name, element)
 					if not name or name == "" then return end
 					table.insert(searchRegistry, {
@@ -2049,7 +2141,12 @@ function MacLib:Window(Settings)
 						element = element,
 						tabSelectFunc = function() if tabContext.selectFunc then tabContext.selectFunc() end end,
 						scrollFrame = tabContext.scrollFrame,
+						revealFunc = revealForSearch,
 					})
+				end
+
+				if Settings.Collapsible then
+					registerElement(sectionTitle, sectionOuter)
 				end
 
 				function SectionFunctions:Button(Settings, Flag)
@@ -2339,7 +2436,6 @@ function MacLib:Window(Settings)
 					sliderValue.TextColor3 = Color3.fromRGB(255, 255, 255)
 					sliderValue.TextSize = 12
 					sliderValue.TextTransparency = 0.1
-					--sliderValue.TextTruncate = Enum.TextTruncate.AtEnd
 					sliderValue.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 					sliderValue.BackgroundTransparency = 0.95
 					sliderValue.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -2413,10 +2509,10 @@ function MacLib:Window(Settings)
 					local dragging = false
 
 					local DisplayMethods = {
-						Hundredths = function(sliderValue) -- Deprecated use Settings.Precision
+						Hundredths = function(sliderValue)
 							return string.format("%.2f", sliderValue)
 						end,
-						Tenths = function(sliderValue) -- Deprecated use Settings.Precision
+						Tenths = function(sliderValue)
 							return string.format("%.1f", sliderValue)
 						end,
 						Round = function(sliderValue, precision)
@@ -2918,7 +3014,7 @@ function MacLib:Window(Settings)
 					local DropdownFunctions = { Settings = Settings, IgnoreConfig = false, Class = "Dropdown" }
 					local Selected = {}
 					local OptionObjs = {}
-					local dropped = false  -- pre-declared so updateHeaderLayout can guard against open state
+					local dropped = false
 
 					local dropdown = Instance.new("Frame")
 					dropdown.Name = "Dropdown"
@@ -2929,7 +3025,7 @@ function MacLib:Window(Settings)
 					dropdown.Size = UDim2.new(1, 0, 0, 38)
 					dropdown.Parent = section
 					dropdown.ClipsDescendants = true
-					dropdown.AutomaticSize = Enum.AutomaticSize.None  -- managed manually to support open/close animation
+					dropdown.AutomaticSize = Enum.AutomaticSize.None
 
 					local dropdownUIPadding = Instance.new("UIPadding")
 					dropdownUIPadding.Name = "DropdownUIPadding"
@@ -2969,18 +3065,15 @@ function MacLib:Window(Settings)
 					dropdownName.Size = UDim2.new(1, -20, 0, 0)
 					dropdownName.Parent = dropdown
 
-					-- Vertical padding so text stays centered in the header row
 					local dropdownNamePadding = Instance.new("UIPadding")
 					dropdownNamePadding.PaddingTop = UDim.new(0, 12)
 					dropdownNamePadding.PaddingBottom = UDim.new(0, 12)
 					dropdownNamePadding.Parent = dropdownName
 
-					-- Keep header height and dropdownFrame position in sync when text wraps
 					local function updateHeaderLayout()
 						local h = HEADER_H()
 						dropdownFrame.Position = UDim2.new(0, 0, 0, h)
 						dropdownFrame.Size = UDim2.new(1, 0, 1, -h)
-						-- Only snap dropdown size when closed; open size is managed by CalculateDropdownSize
 						if not dropped then
 							dropdown.Size = UDim2.new(1, 0, 0, h)
 						end
@@ -3012,8 +3105,8 @@ function MacLib:Window(Settings)
 					dropdownImage.Size = UDim2.fromOffset(14, 14)
 					dropdownImage.Parent = dropdown
 
-					local MIN_HEADER_H = 38  -- minimum header height (single line)
-					local MAX_LIST_H = 148 -- max scrollable area before capping
+					local MIN_HEADER_H = 38
+					local MAX_LIST_H = 148
 					local function HEADER_H()
 						local labelH = dropdownName.AbsoluteSize.Y
 						return math.max(labelH > 0 and labelH or MIN_HEADER_H, MIN_HEADER_H)
@@ -3025,11 +3118,9 @@ function MacLib:Window(Settings)
 					dropdownFrame.BackgroundTransparency = 1
 					dropdownFrame.BorderSizePixel = 0
 					dropdownFrame.ClipsDescendants = true
-					-- sits below the header row
 					dropdownFrame.Position = UDim2.new(0, 0, 0, HEADER_H())
 					dropdownFrame.Size = UDim2.new(1, 0, 1, -HEADER_H())
 					dropdownFrame.Visible = false
-					-- let canvas grow with content; the frame itself is clamped by CalculateDropdownSize
 					dropdownFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 					dropdownFrame.CanvasSize = UDim2.new()
 					dropdownFrame.ScrollBarThickness = 3
@@ -4879,7 +4970,7 @@ function MacLib:Window(Settings)
 					labelText.Name = "LabelText"
 					labelText.FontFace = Font.new(assets.interFont)
 					labelText.RichText = true
-					labelText.Text = LabelFunctions.Settings.Text or LabelFunctions.Settings.Name -- Settings.Name Deprecated use Settings.Text
+					labelText.Text = LabelFunctions.Settings.Text or LabelFunctions.Settings.Name
 					labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
 					labelText.TextSize = 13
 					labelText.TextTransparency = 0.5
@@ -4923,7 +5014,7 @@ function MacLib:Window(Settings)
 					subLabelText.Name = "SubLabelText"
 					subLabelText.FontFace = Font.new(assets.interFont)
 					subLabelText.RichText = true
-					subLabelText.Text = SubLabelFunctions.Settings.Text or SubLabelFunctions.Settings.Name -- Settings.Name Deprecated use Settings.Text
+					subLabelText.Text = SubLabelFunctions.Settings.Text or SubLabelFunctions.Settings.Name
 					subLabelText.TextColor3 = Color3.fromRGB(255, 255, 255)
 					subLabelText.TextSize = 12
 					subLabelText.TextTransparency = 0.7
@@ -5839,7 +5930,6 @@ function MacLib:Window(Settings)
 	end
 
 	local function _SetUserInfoState(State)
-		-- LixHub branding is always static; nothing to toggle
 		lixLogo.Visible = true
 		displayName.Text = "LixHub"
 		username.Text = "discord.gg/FQXJvnmWPv"
@@ -5878,8 +5968,6 @@ function MacLib:Window(Settings)
 		return _appliedScale
 	end
 
-	-- Key expiry countdown. Pass an ISO 8601 string ("2026-12-31T23:59:59")
-	-- or the compact form ("12/31/26_23:59"). Pass nil or "" to hide.
 	local _keyTimerConn = nil
 function WindowFunctions:SetKeyTimer(expiresAt)
 	if _keyTimerConn then
