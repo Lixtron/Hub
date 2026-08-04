@@ -61,6 +61,69 @@ local assets = {
 	sliderhead = "rbxassetid://18772834246",
 }
 
+local lucide = {
+	module = nil,
+	ready = false,
+	pending = {},
+}
+
+local function directImage(value)
+	if type(value) == "number" then
+		return "rbxassetid://" .. tostring(value)
+	end
+	if type(value) ~= "string" then
+		return nil
+	end
+	if value:match("^%d+$") then
+		return "rbxassetid://" .. value
+	end
+	if value:match("^rbxasset") or value:match("^https?://") then
+		return value
+	end
+	return nil
+end
+
+local function setTabIcon(image, value)
+	local source = directImage(value)
+	if source then
+		image.Image = source
+		image.Visible = true
+		return
+	end
+	if type(value) ~= "string" or value == "" then
+		return
+	end
+	if lucide.module then
+		local ok = pcall(lucide.module.SetIcon, lucide.module, image, value)
+		image.Visible = ok and image.Image ~= ""
+	elseif not lucide.ready then
+		table.insert(lucide.pending, { image = image, name = value })
+	end
+end
+
+task.spawn(function()
+	local ok, source = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/dvorfkar6-lab/uis/main/Icons.luau")
+	local module
+	if ok and type(source) == "string" and type(loadstring) == "function" then
+		local compiledOk, compiled = pcall(loadstring, source)
+		if compiledOk and type(compiled) == "function" then
+			local moduleOk, result = pcall(compiled)
+			if moduleOk and type(result) == "table" and type(result.SetIcon) == "function" then
+				module = result
+			end
+		end
+	end
+	lucide.module = module
+	lucide.ready = true
+	for _, request in ipairs(lucide.pending) do
+		if module and request.image and request.image.Parent then
+			local applied = pcall(module.SetIcon, module, request.image, request.name)
+			request.image.Visible = applied and request.image.Image ~= ""
+		end
+	end
+	lucide.pending = {}
+end)
+
 local function GetGui()
 	local newGui = Instance.new("ScreenGui")
 	newGui.ScreenInsets = Enum.ScreenInsets.None
@@ -1787,18 +1850,20 @@ function MacLib:Window(Settings)
 			tabSwitcherUIListLayout.Parent = tabSwitcher
 
 			local tabImage
+			local tabIcon = Settings.Icon or Settings.Image
 
-			if Settings.Image then
+			if tabIcon then
 				tabImage = Instance.new("ImageLabel")
 				tabImage.Name = "TabImage"
-				tabImage.Image = Settings.Image
 				tabImage.ImageTransparency = 0.5
 				tabImage.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				tabImage.BackgroundTransparency = 1
 				tabImage.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				tabImage.BorderSizePixel = 0
 				tabImage.Size = UDim2.fromOffset(18, 18)
+				tabImage.Visible = false
 				tabImage.Parent = tabSwitcher
+				setTabIcon(tabImage, tabIcon)
 			end
 
 			local tabSwitcherName = Instance.new("TextLabel")
