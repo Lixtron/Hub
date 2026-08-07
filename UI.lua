@@ -6032,9 +6032,9 @@ function MacLib:Window(Settings)
 	function WindowFunctions:GetScale()
 		return _appliedScale
 	end
+local _keyTimerConn = nil
 
-	local _keyTimerConn = nil
-function WindowFunctions:SetKeyTimer(expiresAt)
+function WindowFunctions:SetKeyTimer(expiresAt, tier)
 	if _keyTimerConn then
 		_keyTimerConn:Disconnect()
 		_keyTimerConn = nil
@@ -6043,6 +6043,19 @@ function WindowFunctions:SetKeyTimer(expiresAt)
 	if expiresAt == nil or expiresAt == "" then
 		keyTimerLabel.Visible = false
 		return
+	end
+
+	tier = tier or "Premium"
+
+	local prefix
+	local activeColor
+
+	if tier == "Premium" then
+		prefix = "[PREMIUM]"
+		activeColor = Color3.fromRGB(255, 195, 70)
+	else
+		prefix = "[FREE]"
+		activeColor = Color3.fromRGB(0, 210, 100)
 	end
 
 	local function parseCompact(value)
@@ -6098,12 +6111,12 @@ function WindowFunctions:SetKeyTimer(expiresAt)
 	local expiry
 
 	if type(expiresAt) == "number" then
-if expiresAt == 0 or expiresAt == -1 or expiresAt == math.huge then
-	keyTimerLabel.Text = "[PREMIUM]"
-	keyTimerLabel.TextColor3 = Color3.fromRGB(255, 195, 70)
-	keyTimerLabel.Visible = true
-	return
-end
+		if expiresAt == 0 or expiresAt == -1 or expiresAt == math.huge then
+			keyTimerLabel.Text = prefix
+			keyTimerLabel.TextColor3 = activeColor
+			keyTimerLabel.Visible = true
+			return
+		end
 
 		expiry = expiresAt
 	elseif type(expiresAt) == "string" then
@@ -6112,33 +6125,34 @@ end
 
 	if not expiry then
 		keyTimerLabel.Text = "Key: invalid date"
+		keyTimerLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
 		keyTimerLabel.Visible = true
 		return
 	end
 
-local function formatRemaining(seconds)
-	seconds = math.floor(seconds)
+	local function formatRemaining(seconds)
+		seconds = math.floor(seconds)
 
-	if seconds <= 0 then
-		keyTimerLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-		return "[EXPIRED]"
+		if seconds <= 0 then
+			keyTimerLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+			return "[EXPIRED]"
+		end
+
+		keyTimerLabel.TextColor3 = activeColor
+
+		local days = math.floor(seconds / 86400)
+		local hours = math.floor((seconds % 86400) / 3600)
+		local minutes = math.floor((seconds % 3600) / 60)
+		local secs = seconds % 60
+
+		if days > 0 then
+			return string.format("%s %dd %dh", prefix, days, hours)
+		elseif hours > 0 then
+			return string.format("%s %dh %dm", prefix, hours, minutes)
+		else
+			return string.format("%s %dm %ds", prefix, minutes, secs)
+		end
 	end
-
-	keyTimerLabel.TextColor3 = Color3.fromRGB(255, 195, 70)
-
-	local days = math.floor(seconds / 86400)
-	local hours = math.floor((seconds % 86400) / 3600)
-	local minutes = math.floor((seconds % 3600) / 60)
-	local secs = seconds % 60
-
-	if days > 0 then
-		return string.format("[PREMIUM] %dd %dh", days, hours)
-	elseif hours > 0 then
-		return string.format("[PREMIUM] %dh %dm", hours, minutes)
-	else
-		return string.format("[PREMIUM] %dm %ds", minutes, secs)
-	end
-end
 
 	keyTimerLabel.Visible = true
 
