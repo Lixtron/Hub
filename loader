@@ -26,7 +26,7 @@ local scripts = {
 	[17347863] = {
 		name = "Attack On Titan Revolution",
 		ffa = true,
-		url = "https://gist.githubusercontent.com/Lixtron/e9b7f397712319932f47f0dd93eb43c8/raw/1be5ea8fc655342e6649513e6bb81b9954a85616/aotr.lua",
+		url = "https://api.luarmor.net/files/v4/loaders/434886011fd1689509fc7d727cebb483.lua",
 	},
 
 	[35929511] = {
