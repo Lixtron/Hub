@@ -11,15 +11,34 @@ getgenv().LixHubLoaded = true
 local StarterGui = game:GetService("StarterGui")
 
 local scripts = {
-	[33861560] = "https://api.luarmor.net/files/v4/loaders/7b964728f0872ba471d90063958fc028.lua",
-	[9190691] = "https://api.luarmor.net/files/v4/loaders/2687bfdac44a8af920b0137a331c8b33.lua",
-	[17347863] = "https://gist.githubusercontent.com/Lixtron/e9b7f397712319932f47f0dd93eb43c8/raw/1be5ea8fc655342e6649513e6bb81b9954a85616/aotr.lua",
-	[35929511] = "https://api.luarmor.net/files/v4/loaders/ed4e6fa2c50ca4ea890bedf40fc647f2.lua",
+	[33861560] = {
+		name = "Universal Tower Defense",
+		ffa = true,
+		url = "https://api.luarmor.net/files/v4/loaders/7b964728f0872ba471d90063958fc028.lua",
+	},
+
+	[9190691] = {
+		name = "Anime Squadron",
+		ffa = true,
+		url = "https://api.luarmor.net/files/v4/loaders/2687bfdac44a8af920b0137a331c8b33.lua",
+	},
+
+	[17347863] = {
+		name = "Attack On Titan Revolution",
+		ffa = true,
+		url = "https://gist.githubusercontent.com/Lixtron/e9b7f397712319932f47f0dd93eb43c8/raw/1be5ea8fc655342e6649513e6bb81b9954a85616/aotr.lua",
+	},
+
+	[35929511] = {
+		name = "Anime Expeditions",
+		ffa = true,
+		url = "https://api.luarmor.net/files/v4/loaders/ed4e6fa2c50ca4ea890bedf40fc647f2.lua",
+	},
 }
 
-local url = scripts[game.CreatorId]
+local current = scripts[game.CreatorId]
 
-if not url then
+if not current then
 	getgenv().LixHubLoaded = nil
 
 	StarterGui:SetCore("SendNotification", {
@@ -37,4 +56,19 @@ StarterGui:SetCore("SendNotification", {
 	Duration = 5,
 })
 
-loadstring(game:HttpGet(url))()
+if current.ffa then
+	loadstring(game:HttpGet(current.url))()
+	return
+end
+
+getgenv().LixHub = {
+	name = current.name,
+	script_id = current.script_id,
+	creator_id = game.CreatorId,
+	linkvertise = "https://ads.luarmor.net/get_key?for=LixHub_Key__Linkvertise-WEFGHDrpehny",
+	workink = "https://ads.luarmor.net/get_key?for=LixHub_Key__Workink-ZXdPspKIwbVr",
+}
+
+loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/keysystem.lua"
+))()
