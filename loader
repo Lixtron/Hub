@@ -31,8 +31,8 @@ local scripts = {
 
 	[35929511] = {
 		name = "Anime Expeditions",
-		ffa = true,
-		url = "https://api.luarmor.net/files/v4/loaders/ed4e6fa2c50ca4ea890bedf40fc647f2.lua",
+		ffa = false,
+		script_id = "ed4e6fa2c50ca4ea890bedf40fc647f2",
 	},
 }
 
