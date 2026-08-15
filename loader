@@ -34,6 +34,11 @@ local scripts = {
 		ffa = false,
 		script_id = "ed4e6fa2c50ca4ea890bedf40fc647f2",
 	},
+	[111457579] = {
+		name = "Anime Origins",
+		ffa = false,
+		script_id = "79cd2cfb6a8e0410f8d173691ac5affe",
+	},
 }
 
 local current = scripts[game.CreatorId]
