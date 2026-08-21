@@ -25,7 +25,7 @@ local scripts = {
 
 	[17347863] = {
 		name = "Attack On Titan Revolution",
-		ffa = true,
+		ffa = false,
 		url = "https://api.luarmor.net/files/v4/loaders/434886011fd1689509fc7d727cebb483.lua",
 	},
 
