@@ -5926,6 +5926,14 @@ function MacLib:Window(Settings)
 		return windowState
 	end
 
+	function WindowFunctions:GetCurrentTab()
+		return currentTab.Text
+	end
+
+	function WindowFunctions:IsTabSelected(name)
+		return windowState == true and currentTab.Text == tostring(name)
+	end
+
 	local onUnloadCallback
 
 	function WindowFunctions:Unload()
