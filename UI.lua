@@ -5700,7 +5700,12 @@ end]]
 	end
 
 	local function LoadGlobalUISettings()
-		local ok, decoded = pcall(HttpService.JSONDecode, HttpService, readfile(GLOBAL_UI_PATH))
+		if not (type(isfile) == "function" and isfile(GLOBAL_UI_PATH)) then return end
+		local raw
+		local readOk = pcall(function() raw = readfile(GLOBAL_UI_PATH) end)
+		if not readOk or type(raw) ~= "string" or raw == "" then return end
+		local ok, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
+		if not ok or type(decoded) ~= "table" or type(decoded.objects) ~= "table" then return end
 		local loaders = {
 			Dropdown = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateSelection(o.value) end end,
 			Slider   = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateValue(tonumber(o.value) or o.value) end end,
