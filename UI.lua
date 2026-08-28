@@ -1,6 +1,6 @@
-local MacLib = { 
-	Options = {}, 
-	Folder = "Maclib", 
+local MacLib = {
+	Options = {},
+	Folder = "Maclib",
 	GetService = function(service)
 		local svc
 		local ok = pcall(function() svc = game:GetService(service) end)
@@ -60,6 +60,109 @@ local assets = {
 	sliderbar = "rbxassetid://18772615246",
 	sliderhead = "rbxassetid://18772834246",
 }
+
+local Themes = {
+	["Dark"] = {
+		base         = Color3.fromRGB(13,  13,  13),
+		baseTrans    = 0.04,
+		acrylicTint  = "Institutional white",
+		acrylicTrans = 0.98,
+		stroke       = Color3.fromRGB(255, 255, 255),
+		searchBg     = Color3.fromRGB(18,  18,  18),
+		strokeTrans  = 0.80,
+		gradientStart= 0.72,
+	},
+	["Void"] = {
+		base         = Color3.fromRGB(10,  6,   22),
+		baseTrans    = 0.05,
+		acrylicTint  = "Alder",
+		acrylicTrans = 0.96,
+		stroke       = Color3.fromRGB(160, 80,  255),
+		searchBg     = Color3.fromRGB(14,  9,   32),
+		strokeTrans  = 0.52,
+		gradientStart= 0.22,
+	},
+	["Ocean"] = {
+		base         = Color3.fromRGB(4,   18,  34),
+		baseTrans    = 0.07,
+		acrylicTint  = "Bright blue",
+		acrylicTrans = 0.94,
+		stroke       = Color3.fromRGB(0,   215, 235),
+		searchBg     = Color3.fromRGB(6,   24,  44),
+		strokeTrans  = 0.54,
+		gradientStart= 0.24,
+	},
+	["Ember"] = {
+		base         = Color3.fromRGB(26,  5,   3),
+		baseTrans    = 0.06,
+		acrylicTint  = "Bright red",
+		acrylicTrans = 0.93,
+		stroke       = Color3.fromRGB(255, 60,  20),
+		searchBg     = Color3.fromRGB(34,  7,   4),
+		strokeTrans  = 0.48,
+		gradientStart= 0.20,
+	},
+	["Forest"] = {
+		base         = Color3.fromRGB(4,   20,  8),
+		baseTrans    = 0.07,
+		acrylicTint  = "Bright green",
+		acrylicTrans = 0.93,
+		stroke       = Color3.fromRGB(30,  240, 100),
+		searchBg     = Color3.fromRGB(6,   26,  12),
+		strokeTrans  = 0.54,
+		gradientStart= 0.24,
+	},
+	["Rose"] = {
+		base         = Color3.fromRGB(28,  4,   18),
+		baseTrans    = 0.06,
+		acrylicTint  = "Hot pink",
+		acrylicTrans = 0.92,
+		stroke       = Color3.fromRGB(255, 50,  160),
+		searchBg     = Color3.fromRGB(36,  6,   24),
+		strokeTrans  = 0.50,
+		gradientStart= 0.22,
+	},
+	["Gold"] = {
+		base         = Color3.fromRGB(22,  14,  2),
+		baseTrans    = 0.06,
+		acrylicTint  = "Bright yellow",
+		acrylicTrans = 0.94,
+		stroke       = Color3.fromRGB(255, 200, 20),
+		searchBg     = Color3.fromRGB(28,  20,  3),
+		strokeTrans  = 0.50,
+		gradientStart= 0.22,
+	},
+	["Arctic"] = {
+		base         = Color3.fromRGB(7,   14,  30),
+		baseTrans    = 0.04,
+		acrylicTint  = "Medium blue",
+		acrylicTrans = 0.95,
+		stroke       = Color3.fromRGB(150, 210, 255),
+		searchBg     = Color3.fromRGB(10,  18,  40),
+		strokeTrans  = 0.60,
+		gradientStart= 0.34,
+	},
+}
+
+local function resolveTheme(Settings)
+	if type(Settings.Theme) == "table" then
+		local t = Settings.Theme
+		return {
+			base         = t.base         or Themes["Dark"].base,
+			baseTrans    = t.baseTrans    or Themes["Dark"].baseTrans,
+			acrylicTint  = t.acrylicTint  or Themes["Dark"].acrylicTint,
+			acrylicTrans = t.acrylicTrans or Themes["Dark"].acrylicTrans,
+			stroke       = t.stroke       or Themes["Dark"].stroke,
+			searchBg     = t.searchBg     or Themes["Dark"].searchBg,
+			strokeTrans  = t.strokeTrans  or Themes["Dark"].strokeTrans,
+			gradientStart= t.gradientStart or Themes["Dark"].gradientStart,
+		}
+	end
+	local name = (type(Settings.Theme) == "string") and Settings.Theme or "Dark"
+	return Themes[name] or Themes["Dark"]
+end
+
+MacLib.Themes = Themes
 
 local lucide = {
 	module = nil,
@@ -206,6 +309,129 @@ function MacLib:Window(Settings)
 		acrylicBlur = true
 	end
 
+	local _autoExecEnabled  = false
+	local _autoExecQueued   = false
+	local _AUTO_EXEC_LOADER = [[
+getgenv().__LIXHUB_AUTOEXEC_QUEUED = nil
+if getgenv().__LIXHUB_AUTOEXEC_ENABLED ~= false then
+	task.wait(2)
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/Lixtron/Hub/refs/heads/main/loader"))()
+end]]
+
+	local function _autoExecQueueFunction()
+		if type(queue_on_teleport) == "function" then return queue_on_teleport end
+		if type(getgenv) == "function" then
+			local g = getgenv()
+			if type(g.queue_on_teleport) == "function" then return g.queue_on_teleport end
+		end
+		return nil
+	end
+
+	local function _autoExecApply(enabled)
+		_autoExecEnabled = enabled
+		getgenv().__LIXHUB_AUTOEXEC_ENABLED = _autoExecEnabled
+		if not _autoExecEnabled then return end
+		if _autoExecQueued or (getgenv().__LIXHUB_AUTOEXEC_QUEUED == true) then return end
+		local queueFn = _autoExecQueueFunction()
+		if not queueFn then
+			WindowFunctions:Notify({
+				Title = "Auto Execute",
+				Description = "Your executor does not expose queue_on_teleport.",
+			})
+			return
+		end
+		local ok, err = pcall(queueFn, _AUTO_EXEC_LOADER)
+		if ok then
+			_autoExecQueued = true
+			getgenv().__LIXHUB_AUTOEXEC_QUEUED = true
+		else
+			WindowFunctions:Notify({
+				Title = "Auto Execute",
+				Description = "Failed to queue loader: " .. tostring(err),
+			})
+		end
+	end
+
+	local _autoRejoinEnabled  = false
+	local _autoRejoinConn     = nil
+
+	local function _findRejoinServer()
+		local hs = MacLib.GetService("HttpService")
+		local tp = MacLib.GetService("TeleportService")
+		local cursor = ""
+		for _ = 1, 5 do
+			local url = "https://games.roblox.com/v1/games/"
+				.. tostring(game.PlaceId)
+				.. "/servers/Public?sortOrder=Asc&limit=100"
+			if cursor ~= "" then
+				url = url .. "&cursor=" .. hs:UrlEncode(cursor)
+			end
+			local ok, resp = pcall(function()
+				return game:HttpGet(url)
+			end)
+			local body = ok and resp
+			if type(body) == "string" then
+				local dok, data = pcall(hs.JSONDecode, hs, body)
+				if dok and type(data) == "table" and type(data.data) == "table" then
+					for _, srv in ipairs(data.data) do
+						if type(srv) == "table"
+							and type(srv.id) == "string"
+							and srv.id ~= game.JobId
+							and tonumber(srv.playing)
+							and tonumber(srv.maxPlayers)
+							and tonumber(srv.playing) < tonumber(srv.maxPlayers)
+						then
+							return srv.id
+						end
+					end
+					cursor = type(data.nextPageCursor) == "string" and data.nextPageCursor or ""
+					if cursor == "" then break end
+				end
+			end
+			task.wait(0.5)
+		end
+	end
+
+	local _rejoinInProgress = false
+	local function _doRejoin()
+		if _rejoinInProgress then return end
+		_rejoinInProgress = true
+		task.wait(0.4)
+		local tp = MacLib.GetService("TeleportService")
+		local lp = MacLib.GetService("Players").LocalPlayer
+		local serverId = _findRejoinServer()
+		if serverId then
+			local ok = pcall(tp.TeleportToPlaceInstance, tp, game.PlaceId, serverId, lp)
+			if ok then return end
+		end
+		local ok2 = pcall(tp.Teleport, tp, game.PlaceId, lp)
+		if not ok2 then
+			_rejoinInProgress = false
+		end
+	end
+
+	local function _autoRejoinApply(enabled)
+		_autoRejoinEnabled = enabled
+		if _autoRejoinConn then
+			_autoRejoinConn:Disconnect()
+			_autoRejoinConn = nil
+		end
+		if not _autoRejoinEnabled then return end
+		local cg
+		pcall(function() cg = game:GetService("CoreGui") end)
+		if not cg then return end
+		_autoRejoinConn = cg.DescendantAdded:Connect(function(desc)
+			if desc.Name == "ErrorPrompt" and _autoRejoinEnabled then
+				task.wait(0.15)
+				task.spawn(_doRejoin)
+			end
+		end)
+	end
+
+	local _acrylicCustomTrans = nil
+
+	local theme = resolveTheme(Settings)
+
 	local macLib = GetGui()
 
 	local notifications = Instance.new("Frame")
@@ -238,8 +464,8 @@ function MacLib:Window(Settings)
 	base.Name = "Base"
 	base.Active = true
 	base.AnchorPoint = Vector2.new(0.5, 0.5)
-	base.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-	base.BackgroundTransparency = Settings.AcrylicBlur and 0.05 or 0
+	base.BackgroundColor3 = theme.base
+	base.BackgroundTransparency = Settings.AcrylicBlur and theme.baseTrans or 0
 	base.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	base.BorderSizePixel = 0
 	base.Position = UDim2.fromScale(0.5, 0.5)
@@ -258,9 +484,32 @@ function MacLib:Window(Settings)
 	local baseUIStroke = Instance.new("UIStroke")
 	baseUIStroke.Name = "BaseUIStroke"
 	baseUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	baseUIStroke.Color = Color3.fromRGB(255, 255, 255)
-	baseUIStroke.Transparency = 0.9
+	baseUIStroke.Color = theme.stroke
+	baseUIStroke.Transparency = theme.strokeTrans or 0.80
 	baseUIStroke.Parent = base
+
+	local baseGradientFrame = Instance.new("Frame")
+	baseGradientFrame.Name = "BaseGradientFrame"
+	baseGradientFrame.Size = UDim2.fromScale(1, 1)
+	baseGradientFrame.BackgroundColor3 = theme.stroke
+	baseGradientFrame.BackgroundTransparency = 1
+	baseGradientFrame.BorderSizePixel = 0
+	baseGradientFrame.ZIndex = 0
+	baseGradientFrame.Parent = base
+
+	local baseGradientCorner = Instance.new("UICorner")
+	baseGradientCorner.CornerRadius = UDim.new(0, 10)
+	baseGradientCorner.Parent = baseGradientFrame
+
+	local baseGradient = Instance.new("UIGradient")
+	baseGradient.Name = "BaseGradient"
+	baseGradient.Rotation = 135
+	baseGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,    theme.gradientStart or 0.72),
+		NumberSequenceKeypoint.new(0.50, 1),
+		NumberSequenceKeypoint.new(1,    1),
+	})
+	baseGradient.Parent = baseGradientFrame
 
 	local sidebar = Instance.new("Frame")
 	sidebar.Name = "Sidebar"
@@ -449,7 +698,7 @@ function MacLib:Window(Settings)
 	information.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	information.BorderSizePixel = 0
 	information.Position = UDim2.fromOffset(0, 31)
-	information.Size = UDim2.new(1, 0, 0, 48)
+	information.Size = UDim2.new(1, 0, 0, 62)
 
 	local divider2 = Instance.new("Frame")
 	divider2.Name = "Divider"
@@ -472,111 +721,101 @@ function MacLib:Window(Settings)
 
 	local informationHolderUIPadding = Instance.new("UIPadding")
 	informationHolderUIPadding.Name = "InformationHolderUIPadding"
-	informationHolderUIPadding.PaddingBottom = UDim.new(0, 7)
-	informationHolderUIPadding.PaddingLeft = UDim.new(0, 23)
-	informationHolderUIPadding.PaddingRight = UDim.new(0, 22)
-	informationHolderUIPadding.PaddingTop = UDim.new(0, 7)
+	informationHolderUIPadding.PaddingLeft = UDim.new(0, 14)
+	informationHolderUIPadding.PaddingRight = UDim.new(0, 14)
+	informationHolderUIPadding.PaddingTop = UDim.new(0, 10)
+	informationHolderUIPadding.PaddingBottom = UDim.new(0, 10)
 	informationHolderUIPadding.Parent = informationHolder
 
-	local globalSettingsButton = Instance.new("ImageButton")
-	globalSettingsButton.Name = "GlobalSettingsButton"
-	globalSettingsButton.Image = assets.globe
-	globalSettingsButton.ImageTransparency = 0.5
-	globalSettingsButton.AnchorPoint = Vector2.new(1, 0.5)
-	globalSettingsButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	globalSettingsButton.BackgroundTransparency = 1
-	globalSettingsButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	globalSettingsButton.BorderSizePixel = 0
-	globalSettingsButton.Position = UDim2.fromScale(1, 0.5)
-	globalSettingsButton.Size = UDim2.fromOffset(16,16)
-	globalSettingsButton.Parent = informationHolder
+	local headerRow = Instance.new("Frame")
+	headerRow.Name = "HeaderRow"
+	headerRow.BackgroundTransparency = 1
+	headerRow.BorderSizePixel = 0
+	headerRow.Size = UDim2.fromScale(1, 1)
 
-	local function ChangeGlobalSettingsButtonState(State)
-		if State == "Default" then
-			Tween(globalSettingsButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
-				ImageTransparency = 0.5
-			}):Play()
-		elseif State == "Hover" then
-			Tween(globalSettingsButton, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
-				ImageTransparency = 0.3
-			}):Play()
-		end
-	end
+	local headerRowLayout = Instance.new("UIListLayout")
+	headerRowLayout.FillDirection = Enum.FillDirection.Horizontal
+	headerRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	headerRowLayout.Padding = UDim.new(0, 10)
+	headerRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	headerRowLayout.Parent = headerRow
 
-	globalSettingsButton.MouseEnter:Connect(function()
-		ChangeGlobalSettingsButtonState("Hover")
-	end)
-	globalSettingsButton.MouseLeave:Connect(function()
-		ChangeGlobalSettingsButtonState("Default")
-	end)
+	local lixLogo = Instance.new("ImageButton")
+	lixLogo.Name = "LixLogo"
+	lixLogo.AutoButtonColor = false
+	lixLogo.Active = true
+	lixLogo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	lixLogo.BackgroundTransparency = 1
+	lixLogo.BorderSizePixel = 0
+	lixLogo.Size = UDim2.fromOffset(36, 36)
+	lixLogo.Image = "rbxassetid://139436994731049"
+	lixLogo.LayoutOrder = 0
 
-	local titleFrame = Instance.new("Frame")
-	titleFrame.Name = "TitleFrame"
-	titleFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	titleFrame.BackgroundTransparency = 1
-	titleFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	titleFrame.BorderSizePixel = 0
-	titleFrame.Size = UDim2.fromScale(1, 1)
+	local lixLogoCorner = Instance.new("UICorner")
+	lixLogoCorner.CornerRadius = UDim.new(1, 0)
+	lixLogoCorner.Parent = lixLogo
+
+	local lixLogoStroke = Instance.new("UIStroke")
+	lixLogoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	lixLogoStroke.Color = Color3.fromRGB(255, 255, 255)
+	lixLogoStroke.Transparency = 0.85
+	lixLogoStroke.Parent = lixLogo
+
+	lixLogo.Parent = headerRow
+
+	local headerTextStack = Instance.new("Frame")
+	headerTextStack.Name = "HeaderTextStack"
+	headerTextStack.BackgroundTransparency = 1
+	headerTextStack.BorderSizePixel = 0
+	headerTextStack.LayoutOrder = 1
+	headerTextStack.Size = UDim2.new(1, -46, 0, 0)
+	headerTextStack.AutomaticSize = Enum.AutomaticSize.Y
+
+	local headerTextLayout = Instance.new("UIListLayout")
+	headerTextLayout.Padding = UDim.new(0, 4)
+	headerTextLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	headerTextLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	headerTextLayout.Parent = headerTextStack
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.FontFace = Font.new(
-		assets.interFont,
-		Enum.FontWeight.SemiBold,
-		Enum.FontStyle.Normal
-	)
+	title.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 	title.Text = Settings.Title
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
 	title.RichText = true
-	title.TextSize = 18
-	title.TextTransparency = 0.1
+	title.TextSize = 20
+	title.TextTransparency = 0.05
 	title.TextTruncate = Enum.TextTruncate.SplitWord
 	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextYAlignment = Enum.TextYAlignment.Center
+	title.TextYAlignment = Enum.TextYAlignment.Top
 	title.AutomaticSize = Enum.AutomaticSize.Y
-	title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	title.BackgroundTransparency = 1
-	title.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	title.BorderSizePixel = 0
-	title.Size = UDim2.new(1, -20, 0, 0)
-	title.Parent = titleFrame
+	title.LayoutOrder = 0
+	title.Size = UDim2.new(1, 0, 0, 0)
+	title.Parent = headerTextStack
 
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Name = "Subtitle"
-	subtitle.FontFace = Font.new(
-		assets.interFont,
-		Enum.FontWeight.Medium,
-		Enum.FontStyle.Normal
-	)
-	subtitle.RichText = true
-	subtitle.Text = Settings.Subtitle
-	subtitle.RichText = true
-	subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	subtitle.TextSize = 12
-	subtitle.TextTransparency = 0.7
-	subtitle.TextTruncate = Enum.TextTruncate.SplitWord
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	subtitle.TextYAlignment = Enum.TextYAlignment.Top
-	subtitle.AutomaticSize = Enum.AutomaticSize.Y
-	subtitle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	subtitle.BackgroundTransparency = 1
-	subtitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	subtitle.BorderSizePixel = 0
-	subtitle.LayoutOrder = 1
-	subtitle.Size = UDim2.new(1, -20, 0, 0)
-	subtitle.Parent = titleFrame
+	local keyTimerLabel = Instance.new("TextLabel")
+	keyTimerLabel.Name = "KeyTimerLabel"
+	keyTimerLabel.FontFace = Font.new(assets.interFont, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+	keyTimerLabel.Text = "[FREE]"
+	keyTimerLabel.TextColor3 = Color3.fromRGB(0, 210, 100)
+	keyTimerLabel.TextSize = 12
+	keyTimerLabel.TextTransparency = 0.1
+	keyTimerLabel.TextTruncate = Enum.TextTruncate.SplitWord
+	keyTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
+	keyTimerLabel.TextYAlignment = Enum.TextYAlignment.Top
+	keyTimerLabel.AutomaticSize = Enum.AutomaticSize.Y
+	keyTimerLabel.BackgroundTransparency = 1
+	keyTimerLabel.BorderSizePixel = 0
+	keyTimerLabel.LayoutOrder = 1
+	keyTimerLabel.Visible = true
+	keyTimerLabel.Size = UDim2.new(1, 0, 0, 0)
+	keyTimerLabel.Parent = headerTextStack
 
-	local titleFrameUIListLayout = Instance.new("UIListLayout")
-	titleFrameUIListLayout.Name = "TitleFrameUIListLayout"
-	titleFrameUIListLayout.Padding = UDim.new(0, 3)
-	titleFrameUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	titleFrameUIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	titleFrameUIListLayout.Parent = titleFrame
-
-	titleFrame.Parent = informationHolder
-
+	headerTextStack.Parent = headerRow
+	headerRow.Parent = informationHolder
 	informationHolder.Parent = information
-
 	information.Parent = sidebar
 
 	local sidebarGroup = Instance.new("Frame")
@@ -585,168 +824,15 @@ function MacLib:Window(Settings)
 	sidebarGroup.BackgroundTransparency = 1
 	sidebarGroup.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	sidebarGroup.BorderSizePixel = 0
-	sidebarGroup.Position = UDim2.fromOffset(0, 79)
-	sidebarGroup.Size = UDim2.new(1, 0, 1, -79)
-
-	local userInfo = Instance.new("Frame")
-	userInfo.Name = "UserInfo"
-	userInfo.AnchorPoint = Vector2.new(0, 1)
-	userInfo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	userInfo.BackgroundTransparency = 1
-	userInfo.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	userInfo.BorderSizePixel = 0
-	userInfo.Position = UDim2.fromScale(0, 1)
-	userInfo.Size = UDim2.new(1, 0, 0, 86)
-
-	local informationGroup = Instance.new("Frame")
-	informationGroup.Name = "InformationGroup"
-	informationGroup.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	informationGroup.BackgroundTransparency = 1
-	informationGroup.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	informationGroup.BorderSizePixel = 0
-	informationGroup.Size = UDim2.fromScale(1, 1)
-
-	local informationGroupUIPadding = Instance.new("UIPadding")
-	informationGroupUIPadding.Name = "InformationGroupUIPadding"
-	informationGroupUIPadding.PaddingBottom = UDim.new(0, 10)
-	informationGroupUIPadding.PaddingLeft = UDim.new(0, 20)
-	informationGroupUIPadding.Parent = informationGroup
-
-	local informationGroupUIListLayout = Instance.new("UIListLayout")
-	informationGroupUIListLayout.Name = "InformationGroupUIListLayout"
-	informationGroupUIListLayout.Padding = UDim.new(0, 10)
-	informationGroupUIListLayout.FillDirection = Enum.FillDirection.Horizontal
-	informationGroupUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	informationGroupUIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	informationGroupUIListLayout.Parent = informationGroup
-
-	local lixLogo = Instance.new("ImageLabel")
-	lixLogo.Name = "LixLogo"
-	lixLogo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	lixLogo.BackgroundTransparency = 1
-	lixLogo.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	lixLogo.BorderSizePixel = 0
-	lixLogo.Size = UDim2.fromOffset(44, 44)
-	lixLogo.Image = "rbxassetid://139436994731049"
-
-	local lixLogoCorner = Instance.new("UICorner")
-	lixLogoCorner.Name = "UICorner"
-	lixLogoCorner.CornerRadius = UDim.new(1, 0)
-	lixLogoCorner.Parent = lixLogo
-
-	local lixLogoStroke = Instance.new("UIStroke")
-	lixLogoStroke.Name = "BaseUIStroke"
-	lixLogoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	lixLogoStroke.Color = Color3.fromRGB(255, 255, 255)
-	lixLogoStroke.Transparency = 0.9
-	lixLogoStroke.Parent = lixLogo
-
-	lixLogo.Parent = informationGroup
-
-	local userAndDisplayFrame = Instance.new("Frame")
-	userAndDisplayFrame.Name = "UserAndDisplayFrame"
-	userAndDisplayFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	userAndDisplayFrame.BackgroundTransparency = 1
-	userAndDisplayFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	userAndDisplayFrame.BorderSizePixel = 0
-	userAndDisplayFrame.LayoutOrder = 1
-	userAndDisplayFrame.Size = UDim2.new(1, -54, 0, 44)
-
-	local displayName = Instance.new("TextLabel")
-	displayName.Name = "DisplayName"
-	displayName.FontFace = Font.new(
-		assets.interFont,
-		Enum.FontWeight.SemiBold,
-		Enum.FontStyle.Normal
-	)
-	displayName.Text = "LixHub"
-	displayName.TextColor3 = Color3.fromRGB(255, 255, 255)
-	displayName.TextSize = 16
-	displayName.TextTransparency = 0.1
-	displayName.TextTruncate = Enum.TextTruncate.SplitWord
-	displayName.TextXAlignment = Enum.TextXAlignment.Left
-	displayName.TextYAlignment = Enum.TextYAlignment.Top
-	displayName.AutomaticSize = Enum.AutomaticSize.XY
-	displayName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	displayName.BackgroundTransparency = 1
-	displayName.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	displayName.BorderSizePixel = 0
-	displayName.Parent = userAndDisplayFrame
-	displayName.Size = UDim2.fromScale(1, 0)
-
-	local userAndDisplayFrameUIPadding = Instance.new("UIPadding")
-	userAndDisplayFrameUIPadding.Name = "UserAndDisplayFrameUIPadding"
-	userAndDisplayFrameUIPadding.PaddingLeft = UDim.new(0, 0)
-	userAndDisplayFrameUIPadding.PaddingTop = UDim.new(0, 2)
-	userAndDisplayFrameUIPadding.Parent = userAndDisplayFrame
-
-	local userAndDisplayFrameUIListLayout = Instance.new("UIListLayout")
-	userAndDisplayFrameUIListLayout.Name = "UserAndDisplayFrameUIListLayout"
-	userAndDisplayFrameUIListLayout.Padding = UDim.new(0, 3)
-	userAndDisplayFrameUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	userAndDisplayFrameUIListLayout.Parent = userAndDisplayFrame
-
-	local username = Instance.new("TextLabel")
-	username.Name = "Username"
-	username.FontFace = Font.new(
-		assets.interFont,
-		Enum.FontWeight.SemiBold,
-		Enum.FontStyle.Normal
-	)
-	username.Text = "discord.gg/FQXJvnmWPv"
-	username.TextColor3 = Color3.fromRGB(255, 255, 255)
-	username.TextSize = 13
-	username.TextTransparency = 0.7
-	username.TextTruncate = Enum.TextTruncate.SplitWord
-	username.TextXAlignment = Enum.TextXAlignment.Left
-	username.TextYAlignment = Enum.TextYAlignment.Top
-	username.AutomaticSize = Enum.AutomaticSize.XY
-	username.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	username.BackgroundTransparency = 1
-	username.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	username.BorderSizePixel = 0
-	username.LayoutOrder = 1
-	username.Parent = userAndDisplayFrame
-	username.Size = UDim2.fromScale(1, 0)
-
-	local keyTimerLabel = Instance.new("TextLabel")
-	keyTimerLabel.Name = "KeyTimerLabel"
-	keyTimerLabel.FontFace = Font.new(
-		assets.interFont,
-		Enum.FontWeight.Regular,
-		Enum.FontStyle.Normal
-	)
-	keyTimerLabel.Text = "[FREE]"
-	keyTimerLabel.TextColor3 = Color3.fromRGB(0, 210, 100)
-	keyTimerLabel.TextSize = 13
-	keyTimerLabel.TextTransparency = 0.1
-	keyTimerLabel.TextTruncate = Enum.TextTruncate.SplitWord
-	keyTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
-	keyTimerLabel.TextYAlignment = Enum.TextYAlignment.Top
-	keyTimerLabel.AutomaticSize = Enum.AutomaticSize.XY
-	keyTimerLabel.BackgroundTransparency = 1
-	keyTimerLabel.BorderSizePixel = 0
-	keyTimerLabel.LayoutOrder = 2
-	keyTimerLabel.Visible = true
-	keyTimerLabel.Parent = userAndDisplayFrame
-
-	userAndDisplayFrame.Parent = informationGroup
-
-	informationGroup.Parent = userInfo
-
-	local userInfoUIPadding = Instance.new("UIPadding")
-	userInfoUIPadding.Name = "UserInfoUIPadding"
-	userInfoUIPadding.PaddingLeft = UDim.new(0, 10)
-	userInfoUIPadding.PaddingRight = UDim.new(0, 10)
-	userInfoUIPadding.Parent = userInfo
-
-	userInfo.Parent = sidebarGroup
+	sidebarGroup.Position = UDim2.fromOffset(0, 93)
+	sidebarGroup.Size = UDim2.new(1, 0, 1, -93)
 
 	local sidebarGroupUIPadding = Instance.new("UIPadding")
 	sidebarGroupUIPadding.Name = "SidebarGroupUIPadding"
 	sidebarGroupUIPadding.PaddingLeft = UDim.new(0, 10)
 	sidebarGroupUIPadding.PaddingRight = UDim.new(0, 10)
-	sidebarGroupUIPadding.PaddingTop = UDim.new(0, 31)
+	sidebarGroupUIPadding.PaddingTop = UDim.new(0, 10)
+	sidebarGroupUIPadding.PaddingBottom = UDim.new(0, 10)
 	sidebarGroupUIPadding.Parent = sidebarGroup
 
 	local tabSwitchers = Instance.new("Frame")
@@ -755,7 +841,7 @@ function MacLib:Window(Settings)
 	tabSwitchers.BackgroundTransparency = 1
 	tabSwitchers.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	tabSwitchers.BorderSizePixel = 0
-	tabSwitchers.Size = UDim2.new(1, 0, 1, -130)
+	tabSwitchers.Size = UDim2.new(1, 0, 1, -52)
 
 	local tabSwitchersScrollingFrame = Instance.new("ScrollingFrame")
 	tabSwitchersScrollingFrame.Name = "TabSwitchersScrollingFrame"
@@ -783,14 +869,135 @@ function MacLib:Window(Settings)
 	tabSwitchersScrollingFrameUIPadding.Parent = tabSwitchersScrollingFrame
 
 	tabSwitchersScrollingFrame.Parent = tabSwitchers
-
 	tabSwitchers.Parent = sidebarGroup
 
-	sidebarGroup.Parent = sidebar
+	local DISCORD_INVITE = "https://discord.gg/6wEFzDAeYn"
 
+	local discordFooter = Instance.new("Frame")
+	discordFooter.Name = "DiscordFooter"
+	discordFooter.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	discordFooter.BackgroundTransparency = 1
+	discordFooter.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	discordFooter.BorderSizePixel = 0
+	discordFooter.AnchorPoint = Vector2.new(0, 1)
+	discordFooter.Position = UDim2.new(0, 0, 1, 0)
+	discordFooter.Size = UDim2.new(1, 0, 0, 46)
+	discordFooter.Parent = sidebarGroup
+
+	local discordFooterLayout = Instance.new("UIListLayout")
+	discordFooterLayout.Name = "DiscordFooterLayout"
+	discordFooterLayout.FillDirection = Enum.FillDirection.Horizontal
+	discordFooterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	discordFooterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	discordFooterLayout.Padding = UDim.new(0, 10)
+	discordFooterLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	discordFooterLayout.Parent = discordFooter
+
+	local discordFooterPadding = Instance.new("UIPadding")
+	discordFooterPadding.Name = "DiscordFooterPadding"
+	discordFooterPadding.PaddingLeft = UDim.new(0, 12)
+	discordFooterPadding.Parent = discordFooter
+
+	local discordCircle = Instance.new("Frame")
+	discordCircle.Name = "DiscordCircle"
+	discordCircle.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+	discordCircle.BackgroundTransparency = 0.25
+	discordCircle.BorderSizePixel = 0
+	discordCircle.Size = UDim2.fromOffset(34, 34)
+	discordCircle.LayoutOrder = 0
+	discordCircle.Parent = discordFooter
+
+	local discordCircleCorner = Instance.new("UICorner")
+	discordCircleCorner.CornerRadius = UDim.new(1, 0)
+	discordCircleCorner.Parent = discordCircle
+
+	local discordBtn = Instance.new("ImageButton")
+	discordBtn.Name = "DiscordBtn"
+	discordBtn.Image = "rbxassetid://10367063073"
+	discordBtn.ImageTransparency = 0
+	discordBtn.ScaleType = Enum.ScaleType.Fit
+	discordBtn.BackgroundTransparency = 1
+	discordBtn.BorderSizePixel = 0
+	discordBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+	discordBtn.Position = UDim2.fromScale(0.5, 0.5)
+	discordBtn.Size = UDim2.fromOffset(20, 20)
+	discordBtn.AutoButtonColor = false
+	discordBtn.Parent = discordCircle
+
+	local discordLabel = Instance.new("TextButton")
+	discordLabel.Name = "DiscordLabel"
+	discordLabel.FontFace = Font.new(
+		assets.interFont,
+		Enum.FontWeight.Medium,
+		Enum.FontStyle.Normal
+	)
+	discordLabel.Text = "Copy discord link!"
+	discordLabel.RichText = false
+	discordLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	discordLabel.TextSize = 13
+	discordLabel.TextTransparency = 0.45
+	discordLabel.TextXAlignment = Enum.TextXAlignment.Left
+	discordLabel.TextYAlignment = Enum.TextYAlignment.Center
+	discordLabel.TextTruncate = Enum.TextTruncate.SplitWord
+	discordLabel.AutomaticSize = Enum.AutomaticSize.None
+	discordLabel.BackgroundTransparency = 1
+	discordLabel.BorderSizePixel = 0
+	discordLabel.AutoButtonColor = false
+	discordLabel.Size = UDim2.new(1, -58, 0, 34)
+	discordLabel.LayoutOrder = 1
+	discordLabel.Parent = discordFooter
+
+	local discordCopied = false
+	local function doCopy()
+		if discordCopied then return end
+		discordCopied = true
+		pcall(function()
+			if typeof(setclipboard) == "function" then
+				setclipboard(DISCORD_INVITE)
+			elseif typeof(toclipboard) == "function" then
+				toclipboard(DISCORD_INVITE)
+			end
+		end)
+		discordLabel.Text = "Copied!"
+		discordLabel.TextTransparency = 0
+		discordCircle.BackgroundTransparency = 0
+		task.delay(1.5, function()
+			discordLabel.Text = "Copy discord link!"
+			discordLabel.TextTransparency = 0.45
+			discordCircle.BackgroundTransparency = 0.25
+			discordCopied = false
+		end)
+	end
+
+	local function onHoverEnter()
+		Tween(discordCircle, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { BackgroundTransparency = 0 }):Play()
+		Tween(discordLabel, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { TextTransparency = 0.1 }):Play()
+	end
+	local function onHoverLeave()
+		if discordCopied then return end
+		Tween(discordCircle, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { BackgroundTransparency = 0.25 }):Play()
+		Tween(discordLabel, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { TextTransparency = 0.45 }):Play()
+	end
+
+	discordBtn.MouseEnter:Connect(onHoverEnter)
+	discordBtn.MouseLeave:Connect(onHoverLeave)
+	discordLabel.MouseEnter:Connect(onHoverEnter)
+	discordLabel.MouseLeave:Connect(onHoverLeave)
+
+	discordBtn.MouseButton1Click:Connect(doCopy)
+	discordLabel.MouseButton1Click:Connect(doCopy)
+
+	local settingsTabFunctions = nil
+	local content
+
+
+	function WindowFunctions:GetSettingsTab()
+		return settingsTabFunctions
+	end
+	sidebarGroup.Parent = sidebar
 	sidebar.Parent = base
 
-	local content = Instance.new("Frame")
+	content = Instance.new("Frame")
 	content.Name = "Content"
 	content.AnchorPoint = Vector2.new(1, 0)
 	content.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -798,14 +1005,16 @@ function MacLib:Window(Settings)
 	content.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	content.BorderSizePixel = 0
 	content.Position = UDim2.fromScale(1, 4.69e-08)
-	content.Size = UDim2.new(0, (base.AbsoluteSize.X - sidebar.AbsoluteSize.X), 1, 0)
+	content.Size = UDim2.fromScale(0.675, 1)
 
 	local resizingContent = false
-	local defaultSidebarWidth = sidebar.AbsoluteSize.X
+	local _baseSize = Settings.Size or UDim2.fromOffset(740, 560)
+	local _baseW = _baseSize.X.Offset > 0 and _baseSize.X.Offset or 740
+	local defaultSidebarWidth = math.floor(_baseW * 0.325)
 	local initialMouseX, initialSidebarWidth
 	local snapRange = 20
 	local minSidebarWidth = 107
-	local maxSidebarWidth = base.AbsoluteSize.X - minSidebarWidth
+	local maxSidebarWidth = _baseW - minSidebarWidth
 
 	local TweenSettings = {
 		DefaultTransparency = 0.9,
@@ -817,7 +1026,7 @@ function MacLib:Window(Settings)
 	local function ChangeState(State)
 		Tween(divider, TweenInfo.new(0.2, TweenSettings.EasingStyle), {
 			BackgroundTransparency = State == "Idle" and TweenSettings.DefaultTransparency or TweenSettings.HoverTransparency
-		}):Play()  
+		}):Play()
 	end
 
 	dividerInteract.MouseEnter:Connect(function()
@@ -1081,7 +1290,7 @@ function MacLib:Window(Settings)
 	local searchResults = Instance.new("Frame")
 	searchResults.Name = "SearchResults"
 	searchResults.AnchorPoint = Vector2.new(1, 0)
-	searchResults.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+	searchResults.BackgroundColor3 = theme.searchBg
 	searchResults.BackgroundTransparency = 0.02
 	searchResults.BorderSizePixel = 0
 	searchResults.Position = UDim2.new(1, 0, 0, 64)
@@ -1314,7 +1523,7 @@ function MacLib:Window(Settings)
 	local globalSettings = Instance.new("Frame")
 	globalSettings.Name = "GlobalSettings"
 	globalSettings.AutomaticSize = Enum.AutomaticSize.XY
-	globalSettings.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	globalSettings.BackgroundColor3 = theme.base
 	globalSettings.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	globalSettings.BorderSizePixel = 0
 	globalSettings.Position = UDim2.fromScale(0.298, 0.104)
@@ -1322,8 +1531,8 @@ function MacLib:Window(Settings)
 	local globalSettingsUIStroke = Instance.new("UIStroke")
 	globalSettingsUIStroke.Name = "GlobalSettingsUIStroke"
 	globalSettingsUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	globalSettingsUIStroke.Color = Color3.fromRGB(255, 255, 255)
-	globalSettingsUIStroke.Transparency = 0.9
+	globalSettingsUIStroke.Color = theme.stroke
+	globalSettingsUIStroke.Transparency = 0.82
 	globalSettingsUIStroke.Parent = globalSettings
 
 	local globalSettingsUICorner = Instance.new("UICorner")
@@ -1354,10 +1563,6 @@ function MacLib:Window(Settings)
 		title.Text = NewTitle
 	end
 
-	function WindowFunctions:UpdateSubtitle(NewSubtitle)
-		subtitle.Text = NewSubtitle
-	end
-
 	local hovering
 	local toggled = globalSettingsUIScale.Scale == 1 and true or false
 	local function toggle()
@@ -1377,10 +1582,6 @@ function MacLib:Window(Settings)
 			toggled = false
 		end
 	end
-	globalSettingsButton.MouseButton1Click:Connect(_sd(function()
-		if not hasGlobalSetting then return end
-		toggle()
-	end))
 	globalSettings.MouseEnter:Connect(function()
 		hovering = true
 	end)
@@ -1573,8 +1774,8 @@ function MacLib:Window(Settings)
 		end
 		DepthOfField.Enabled = true
 		local properties = {
-			Transparency = 0.98;
-			BrickColor = BrickColor.new('Institutional white');
+			Transparency = (_acrylicCustomTrans ~= nil) and _acrylicCustomTrans or theme.acrylicTrans;
+			BrickColor = BrickColor.new(theme.acrylicTint);
 		}
 		local zIndex = 1 - 0.05*frame.ZIndex
 
@@ -1596,10 +1797,10 @@ function MacLib:Window(Settings)
 			end
 		end
 		DrawQuad(
-			camera:ScreenPointToRay(tl.x, tl.y, zIndex).Origin, 
-			camera:ScreenPointToRay(tr.x, tr.y, zIndex).Origin, 
-			camera:ScreenPointToRay(bl.x, bl.y, zIndex).Origin, 
-			camera:ScreenPointToRay(br.x, br.y, zIndex).Origin, 
+			camera:ScreenPointToRay(tl.x, tl.y, zIndex).Origin,
+			camera:ScreenPointToRay(tr.x, tr.y, zIndex).Origin,
+			camera:ScreenPointToRay(bl.x, bl.y, zIndex).Origin,
+			camera:ScreenPointToRay(br.x, br.y, zIndex).Origin,
 			parts
 		)
 		if fetchProps then
@@ -1617,6 +1818,34 @@ function MacLib:Window(Settings)
 	UpdateOrientation(true)
 
 	RunService.RenderStepped:Connect(UpdateOrientation)
+
+	function WindowFunctions:SetTheme(newTheme)
+		local t = resolveTheme({ Theme = newTheme })
+		theme = t
+
+		base.BackgroundColor3       = t.base
+		base.BackgroundTransparency = acrylicBlur and t.baseTrans or 0
+		baseUIStroke.Color          = t.stroke
+		baseUIStroke.Transparency   = t.strokeTrans or 0.80
+
+		if baseGradientFrame then
+			baseGradientFrame.BackgroundColor3 = t.stroke
+		end
+		if baseGradient then
+			baseGradient.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0,    t.gradientStart or 0.72),
+				NumberSequenceKeypoint.new(0.50, 1),
+				NumberSequenceKeypoint.new(1,    1),
+			})
+		end
+
+		globalSettings.BackgroundColor3 = t.base
+		globalSettingsUIStroke.Color     = t.stroke
+
+		searchResults.BackgroundColor3 = t.searchBg
+
+		UpdateOrientation(true)
+	end
 
 	function WindowFunctions:GlobalSetting(Settings)
 		hasGlobalSetting = true
@@ -2432,7 +2661,7 @@ function MacLib:Window(Settings)
 					end
 					function ToggleFunctions:UpdateState(State)
 						togglebool = State
-						NewState(togglebool, ToggleFunctions.Settings.Callback)
+						NewState(togglebool)
 					end
 					function ToggleFunctions:GetState()
 						return togglebool
@@ -2453,6 +2682,8 @@ function MacLib:Window(Settings)
 				end
 
 				function SectionFunctions:Slider(Settings, Flag)
+					Settings.Minimum = Settings.Minimum or Settings.Min
+					Settings.Maximum = Settings.Maximum or Settings.Max
 					local SliderFunctions = { Settings = Settings, IgnoreConfig = false, Class = "Slider" }
 					local slider = Instance.new("Frame")
 					slider.Name = "Slider"
@@ -2611,15 +2842,15 @@ function MacLib:Window(Settings)
 							posXScale = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
 						else
 							local value = val
-							posXScale = (value - SliderFunctions.Settings.Minimum) / (SliderFunctions.Settings.Maximum - Settings.Minimum)
+							posXScale = (value - SliderFunctions.Settings.Minimum) / (SliderFunctions.Settings.Maximum - SliderFunctions.Settings.Minimum)
 						end
 
 						local pos = UDim2.new(posXScale, 0, 0.5, 0)
 						sliderHead.Position = pos
 
-						finalValue = posXScale * (SliderFunctions.Settings.Maximum - SliderFunctions.Settings.Minimum) + Settings.Minimum
+						finalValue = posXScale * (SliderFunctions.Settings.Maximum - SliderFunctions.Settings.Minimum) + SliderFunctions.Settings.Minimum
 
-						sliderValue.Text = (Settings.Prefix or "") .. ValueDisplayMethod(finalValue, SliderFunctions.Settings.Precision) .. (Settings.Suffix or "")
+						sliderValue.Text = (SliderFunctions.Settings.Prefix or "") .. ValueDisplayMethod(finalValue, SliderFunctions.Settings.Precision) .. (SliderFunctions.Settings.Suffix or "")
 
 						if not ignorecallback then
 							task.spawn(function()
@@ -4677,7 +4908,7 @@ function MacLib:Window(Settings)
 						modifierInputs.Blue.Text = tostring(math.floor(c.b * 255 + 0.5))
 						modifierInputs.Alpha.Text = clampInput(modifierInputs.Alpha.Text, 0, 1)
 
-						local hexColor = string.format("#%02X%02X%02X", 
+						local hexColor = string.format("#%02X%02X%02X",
 							math.floor(c.r * 255 + 0.5),
 							math.floor(c.g * 255 + 0.5),
 							math.floor(c.b * 255 + 0.5))
@@ -5303,7 +5534,7 @@ function MacLib:Window(Settings)
 
 				if isStudio then
 					configSection:Label({Text = "Config system unavailable. (Environment isStudio)"})
-					return "Config system unavailable." 
+					return "Config system unavailable."
 				end
 
 				local inputPath = nil
@@ -5438,6 +5669,322 @@ function MacLib:Window(Settings)
 
 		return SectionFunctions
 	end
+	local GLOBAL_UI_PATH = "LixHub/ui_settings.json"
+
+	local function SaveGlobalUISettings()
+		if isStudio or not writefile then return end
+		if isfolder and not isfolder("LixHub") then
+			if makefolder then pcall(makefolder, "LixHub") end
+		end
+		local data = { objects = {} }
+		local opt
+		opt = MacLib.Options["__maclib_theme"]
+		if opt then table.insert(data.objects, { type="Dropdown", flag="__maclib_theme", value=opt.Value }) end
+		opt = MacLib.Options["__maclib_uiscale"]
+		if opt then table.insert(data.objects, { type="Input", flag="__maclib_uiscale", value=opt.Value and tostring(opt.Value) }) end
+		opt = MacLib.Options["__maclib_autohide"]
+		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autohide", state=opt.State or false }) end
+		opt = MacLib.Options["__maclib_acrylicblur"]
+		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_acrylicblur", state=opt.State or false }) end
+		opt = MacLib.Options["__maclib_togglekey"]
+		if opt then
+			local bind = opt:GetBind()
+			table.insert(data.objects, { type="Keybind", flag="__maclib_togglekey", bind=(typeof(bind)=="EnumItem" and bind.Name) or nil })
+		end
+		opt = MacLib.Options["__maclib_autoexecute"]
+		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autoexecute", state=opt.State or false }) end
+		opt = MacLib.Options["__maclib_autorejoin"]
+		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autorejoin", state=opt.State or false }) end
+		local ok, encoded = pcall(HttpService.JSONEncode, HttpService, data)
+		if ok then pcall(writefile, GLOBAL_UI_PATH, encoded) end
+	end
+
+	local function LoadGlobalUISettings()
+		local ok, decoded = pcall(HttpService.JSONDecode, HttpService, readfile(GLOBAL_UI_PATH))
+		local loaders = {
+			Dropdown = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateSelection(o.value) end end,
+			Slider   = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateValue(tonumber(o.value) or o.value) end end,
+			Input    = function(o) if MacLib.Options[o.flag] and o.value then pcall(function() MacLib.Options[o.flag]:UpdateText(o.value) end) end end,
+			Toggle   = function(o) if MacLib.Options[o.flag] and o.state ~= nil then MacLib.Options[o.flag]:UpdateState(o.state) end end,
+			Keybind  = function(o) if MacLib.Options[o.flag] and o.bind   then MacLib.Options[o.flag]:Bind(Enum.KeyCode[o.bind]) end end,
+		}
+		local loaded = {}
+		for _, o in next, decoded.objects do
+			local hasData = (o.value ~= nil) or (o.state ~= nil) or (o.bind ~= nil)
+			if loaders[o.type] and hasData then
+				pcall(loaders[o.type], o)
+				loaded[o.flag] = true
+			end
+		end
+		local scaleOpt = MacLib.Options["__maclib_uiscale"]
+		if loaded["__maclib_uiscale"] and scaleOpt then
+			local rawScale
+			pcall(function() rawScale = scaleOpt.Value end)
+			if not rawScale then
+				pcall(function() rawScale = scaleOpt:GetText() end)
+			end
+			local n = tonumber(rawScale)
+			if n then pcall(function() WindowFunctions:SetScale(math.clamp(n, 0.5, 2.0)) end) end
+		end
+		local blurOpt = MacLib.Options["__maclib_acrylicblur"]
+		if loaded["__maclib_acrylicblur"] and blurOpt then
+			pcall(function() WindowFunctions:SetAcrylicBlurState(blurOpt.State) end)
+		end
+		local themeOpt = MacLib.Options["__maclib_theme"]
+		if loaded["__maclib_theme"] and themeOpt and themeOpt.Value then
+			pcall(function() WindowFunctions:SetTheme(themeOpt.Value) end)
+		end
+		local keybindOpt = MacLib.Options["__maclib_togglekey"]
+		if loaded["__maclib_togglekey"] and keybindOpt then
+			local bind = keybindOpt:GetBind()
+			if typeof(bind) == "EnumItem" then
+				pcall(function() WindowFunctions:SetKeybind(bind) end)
+			end
+		end
+		local aeOpt = MacLib.Options["__maclib_autoexecute"]
+		if loaded["__maclib_autoexecute"] and aeOpt then
+			pcall(function() _autoExecApply(aeOpt.State == true) end)
+		end
+		local arOpt = MacLib.Options["__maclib_autorejoin"]
+		if loaded["__maclib_autorejoin"] and arOpt then
+			pcall(function() _autoRejoinApply(arOpt.State == true) end)
+		end
+	end
+
+	local MenuKeybind = Settings.Keybind or Enum.KeyCode.RightControl
+
+	do
+		local currentThemeName = (type(Settings.Theme) == "string") and Settings.Theme or "Dark"
+		local autoHideEnabled = false
+		local autoHideConn = nil
+
+		local tg = WindowFunctions:TabGroup()
+		local settingsTab = tg:Tab({ Name = "UI Settings", Icon = "settings" })
+		settingsTabFunctions = settingsTab
+
+		local themeSection = settingsTab:Section({ Name = "Theme", Side = "Left" })
+		themeSection:Dropdown({
+			Name = "Theme",
+			Options = { "Dark", "Void", "Ocean", "Ember", "Forest", "Rose", "Gold", "Arctic" },
+			CurrentOption = currentThemeName,
+			Callback = function(value)
+				currentThemeName = value
+				WindowFunctions:SetTheme(value)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_theme")
+
+		local keySection = settingsTab:Section({ Name = "Key", Side = "Left" })
+
+		local keyTimerInfoLabel = keySection:Label({ Text = "Expires in: —" })
+
+		task.spawn(function()
+			while not unloaded do
+				task.wait(1)
+				if keyTimerLabel and keyTimerInfoLabel then
+					local txt = keyTimerLabel.Text
+					if txt == "" or not keyTimerLabel.Visible then
+						txt = "—"
+					end
+					local timeOnly = txt:match("%[.-%]%s*(.+)") or txt
+					keyTimerInfoLabel:UpdateName("Expires in: " .. timeOnly)
+				end
+			end
+		end)
+
+		keySection:Button({
+			Name = "Refresh",
+			Description = "Update the time of your saved key.",
+			Callback = function()
+				local savedKey = nil
+				if type(isfile) == "function" and type(readfile) == "function" then
+					local KEY_FILE = "LixHub/savedkey.txt"
+					local ok, exists = pcall(isfile, KEY_FILE)
+					if ok and exists then
+						local okR, value = pcall(readfile, KEY_FILE)
+						if okR and type(value) == "string" then
+							value = value:match("^%s*(.-)%s*$") or ""
+							if value ~= "" then savedKey = value end
+						end
+					end
+				end
+
+				if not savedKey then
+					WindowFunctions:Notify({
+						Title = "Key",
+						Description = "No saved key found.",
+					})
+					return
+				end
+
+				task.spawn(function()
+					local api2 = getgenv().__LixHubApi
+					if type(api2) ~= "table" or type(api2.check_key) ~= "function" then
+						if _lastKeyExpiresAt ~= nil then
+							WindowFunctions:SetKeyTimer(_lastKeyExpiresAt, _lastKeyTier)
+							WindowFunctions:Notify({
+								Title = "Key",
+								Description = "Timer refreshed.",
+							})
+						else
+							WindowFunctions:Notify({
+								Title = "Key",
+								Description = "Nothing to refresh yet.",
+							})
+						end
+						return
+					end
+
+					local ok, status = pcall(function()
+						return api2.check_key(savedKey)
+					end)
+
+					if not ok or type(status) ~= "table" then
+						WindowFunctions:Notify({
+							Title = "Key",
+							Description = "Refresh failed — couldn't reach auth server.",
+						})
+						return
+					end
+
+					if status.code == "KEY_VALID" then
+						local expiresAt = status.expires_at or status.expiry or status.expire or _lastKeyExpiresAt
+						local tier = status.tier or _lastKeyTier
+						WindowFunctions:SetKeyTimer(expiresAt, tier)
+						WindowFunctions:Notify({
+							Title = "Key",
+							Description = "Timer updated.",
+						})
+					elseif status.code == "KEY_EXPIRED" then
+						WindowFunctions:SetKeyTimer(0, _lastKeyTier)
+						WindowFunctions:Notify({
+							Title = "Key",
+							Description = "Your key has expired.",
+						})
+					else
+						WindowFunctions:Notify({
+							Title = "Key",
+							Description = "Refresh failed: " .. tostring(status.code or "unknown"),
+						})
+					end
+				end)
+			end,
+		})
+
+		keySection:Button({
+			Name = "Delete Saved Key",
+			Description = "Removes your currently saved key (You'll be prompted to enter a key on next execution).",
+			Callback = function()
+				local KEY_FILE = "LixHub/savedkey.txt"
+				local deleted = false
+
+				if type(delfile) == "function" then
+					if type(isfile) == "function" then
+						local ok, exists = pcall(isfile, KEY_FILE)
+						if ok and exists then
+							pcall(delfile, KEY_FILE)
+							deleted = true
+						end
+					else
+						pcall(delfile, KEY_FILE)
+						deleted = true
+					end
+				end
+
+				if deleted then
+					WindowFunctions:Notify({
+						Title = "Key",
+						Description = "Saved key deleted. You'll be prompted on next execution.",
+					})
+				else
+					WindowFunctions:Notify({
+						Title = "Key",
+						Description = "No saved key to delete.",
+					})
+				end
+			end,
+		})
+
+		local displaySection = settingsTab:Section({ Name = "Display", Side = "Right" })
+		displaySection:Input({
+			Name = "UI Scale",
+			Default = "1.0",
+			CharacterLimit = 3,
+			AcceptedCharacters = function(value)
+				local cleaned = value:gsub("[^%d%.]", "")
+				local dotCount = 0
+				cleaned = cleaned:gsub("%.", function()
+					dotCount = dotCount + 1
+					return dotCount == 1 and "." or ""
+				end)
+				return cleaned:sub(1, 3)
+			end,
+			Callback = function(value)
+				local n = tonumber(value)
+				if n then
+					WindowFunctions:SetScale(math.clamp(n, 0.5, 2.0))
+				end
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_uiscale")
+		displaySection:Toggle({
+			Name = "Auto-hide",
+			Default = false,
+			Callback = function(state)
+				autoHideEnabled = state
+				if autoHideConn then autoHideConn:Disconnect(); autoHideConn = nil end
+				if state then
+					autoHideConn = base.MouseLeave:Connect(function()
+						if autoHideEnabled then WindowFunctions:SetState(false) end
+					end)
+					base.MouseEnter:Connect(function()
+						if autoHideEnabled then WindowFunctions:SetState(true) end
+					end)
+				end
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_autohide")
+		displaySection:Toggle({
+			Name = "Acrylic Blur",
+			Default = acrylicBlur,
+			Callback = function(state)
+				WindowFunctions:SetAcrylicBlurState(state)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_acrylicblur")
+
+		local automationSection = settingsTab:Section({ Name = "Automation", Side = "Left" })
+		automationSection:Toggle({
+			Name = "Auto Execute",
+			Description = "Re-runs the loader automatically on teleport.",
+			Default = false,
+			Callback = function(state)
+				_autoExecApply(state)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_autoexecute")
+		automationSection:Toggle({
+			Name = "Auto Rejoin",
+			Description = "Automatically rejoins a server on disconnect.",
+			Default = false,
+			Callback = function(state)
+				_autoRejoinApply(state)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_autorejoin")
+
+		displaySection:Keybind({
+			Name = "Toggle Key",
+			Default = MenuKeybind,
+			Callback = function(key)
+				MenuKeybind = key
+				WindowFunctions:SetKeybind(key)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_togglekey")
+
+		task.delay(0.5, LoadGlobalUISettings)
+	end
 
 	function WindowFunctions:Notify(Settings)
 		local NotificationFunctions = {}
@@ -5446,7 +5993,8 @@ function MacLib:Window(Settings)
 		notification.Name = "Notification"
 		notification.AnchorPoint = Vector2.new(0.5, 0.5)
 		notification.AutomaticSize = Enum.AutomaticSize.Y
-		notification.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+		notification.BackgroundColor3 = theme.base
+		notification.BackgroundTransparency = acrylicBlur and theme.baseTrans or 0
 		notification.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		notification.BorderSizePixel = 0
 		notification.Position = UDim2.fromScale(0.5, 0.5)
@@ -5457,14 +6005,36 @@ function MacLib:Window(Settings)
 		local notificationUIStroke = Instance.new("UIStroke")
 		notificationUIStroke.Name = "NotificationUIStroke"
 		notificationUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		notificationUIStroke.Color = Color3.fromRGB(255, 255, 255)
-		notificationUIStroke.Transparency = 0.9
+		notificationUIStroke.Color = theme.stroke
+		notificationUIStroke.Transparency = theme.strokeTrans or 0.80
 		notificationUIStroke.Parent = notification
 
 		local notificationUICorner = Instance.new("UICorner")
 		notificationUICorner.Name = "NotificationUICorner"
 		notificationUICorner.CornerRadius = UDim.new(0, 10)
 		notificationUICorner.Parent = notification
+
+		local notifGradientFrame = Instance.new("Frame")
+		notifGradientFrame.Name = "NotifGradientFrame"
+		notifGradientFrame.Size = UDim2.fromScale(1, 1)
+		notifGradientFrame.BackgroundColor3 = theme.stroke
+		notifGradientFrame.BackgroundTransparency = 1
+		notifGradientFrame.BorderSizePixel = 0
+		notifGradientFrame.ZIndex = 0
+		notifGradientFrame.Parent = notification
+
+		local notifGradientCorner = Instance.new("UICorner")
+		notifGradientCorner.CornerRadius = UDim.new(0, 10)
+		notifGradientCorner.Parent = notifGradientFrame
+
+		local notifGradient = Instance.new("UIGradient")
+		notifGradient.Rotation = 135
+		notifGradient.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0,    theme.gradientStart or 0.72),
+			NumberSequenceKeypoint.new(0.50, 1),
+			NumberSequenceKeypoint.new(1,    1),
+		})
+		notifGradient.Parent = notifGradientFrame
 
 		local notificationUIScale = Instance.new("UIScale")
 		notificationUIScale.Name = "NotificationUIScale"
@@ -5952,14 +6522,12 @@ function MacLib:Window(Settings)
 		onUnloadCallback = callback
 	end
 
-	local MenuKeybind = Settings.Keybind or Enum.KeyCode.RightControl
-
 	local function ToggleMenu()
 		local state = not WindowFunctions:GetState()
 		WindowFunctions:SetState(state)
 		WindowFunctions:Notify({
 			Title = Settings.Title,
-			Description = (state and "Maximized " or "Minimized ") .. "the menu. Use " .. tostring(MenuKeybind.Name) .. " to toggle it.",
+			Description = (state and "Maximized" or "Minimized") .. " the menu. Use " .. tostring(MenuKeybind.Name) .. " or the button to toggle it.",
 			Lifetime = 5
 		})
 	end
@@ -5972,6 +6540,8 @@ function MacLib:Window(Settings)
 	end)
 
 	minimize.MouseButton1Click:Connect(ToggleMenu)
+
+	lixLogo.MouseButton1Click:Connect(ToggleMenu)
 	exit.MouseButton1Click:Connect(function()
 		WindowFunctions:Dialog({
 			Title = Settings.Title,
@@ -6003,10 +6573,24 @@ function MacLib:Window(Settings)
 		return acrylicBlur
 	end
 
+	function WindowFunctions:SetAcrylicTransparency(value)
+		if value == nil then
+			_acrylicCustomTrans = nil
+		else
+			local n = tonumber(value)
+			if n then
+				_acrylicCustomTrans = math.clamp(n, 0, 1)
+			end
+		end
+	end
+
+	function WindowFunctions:GetAcrylicTransparency()
+		return _acrylicCustomTrans
+	end
+
 	local function _SetUserInfoState(State)
 		lixLogo.Visible = true
-		displayName.Text = "LixHub"
-		username.Text = "discord.gg/FQXJvnmWPv"
+		title.Text = Settings.Title or "LixHub"
 		keyTimerLabel.Text = "[FREE]"
 		keyTimerLabel.Visible = true
 	end
@@ -6042,9 +6626,13 @@ function MacLib:Window(Settings)
 		return _appliedScale
 	end
 
-local _keyTimerConn = nil
+	local _keyTimerConn = nil
+	local _lastKeyExpiresAt = nil
+	local _lastKeyTier = nil
 
-function WindowFunctions:SetKeyTimer(expiresAt, tier)
+	function WindowFunctions:SetKeyTimer(expiresAt, tier)
+	_lastKeyExpiresAt = expiresAt
+	_lastKeyTier = tier
 	if _keyTimerConn then
 		_keyTimerConn:Disconnect()
 		_keyTimerConn = nil
@@ -6182,13 +6770,13 @@ function WindowFunctions:SetKeyTimer(expiresAt, tier)
 
 	updateTimer()
 	_keyTimerConn = RunService.Heartbeat:Connect(updateTimer)
-end
+	end
 	local ClassParser = {
 		["Toggle"] = {
 			Save = function(Flag, data)
 				return {
-					type = "Toggle", 
-					flag = Flag, 
+					type = "Toggle",
+					flag = Flag,
 					state = data.State or false
 				}
 			end,
@@ -6201,8 +6789,8 @@ end
 		["Slider"] = {
 			Save = function(Flag, data)
 				return {
-					type = "Slider", 
-					flag = Flag, 
+					type = "Slider",
+					flag = Flag,
 					value = (data.Value and tostring(data.Value)) or false
 				}
 			end,
@@ -6215,8 +6803,8 @@ end
 		["Input"] = {
 			Save = function(Flag, data)
 				return {
-					type = "Input", 
-					flag = Flag, 
+					type = "Input",
+					flag = Flag,
 					text = data.Text
 				}
 			end,
@@ -6229,8 +6817,8 @@ end
 		["Keybind"] = {
 			Save = function(Flag, data)
 				return {
-					type = "Keybind", 
-					flag = Flag, 
+					type = "Keybind",
+					flag = Flag,
 					bind = (typeof(data.Bind) == "EnumItem" and data.Bind.Name) or nil
 				}
 			end,
@@ -6243,8 +6831,8 @@ end
 		["Dropdown"] = {
 			Save = function(Flag, data)
 				return {
-					type = "Dropdown", 
-					flag = Flag, 
+					type = "Dropdown",
+					flag = Flag,
 					value = data.Value
 				}
 			end,
@@ -6261,8 +6849,8 @@ end
 				end
 
 				return {
-					type = "Colorpicker", 
-					flag = Flag, 
+					type = "Colorpicker",
+					flag = Flag,
 					color = Color3ToHex(data.Color) or nil,
 					alpha = data.Alpha
 				}
@@ -6276,7 +6864,7 @@ end
 				end
 
 				if MacLib.Options[Flag] and data.color then
-					MacLib.Options[Flag]:SetColor(HexToColor3(data.color)) 
+					MacLib.Options[Flag]:SetColor(HexToColor3(data.color))
 					if data.alpha then
 						MacLib.Options[Flag]:SetAlpha(data.alpha)
 					end
@@ -6300,6 +6888,7 @@ end
 			end
 		end
 	end
+
 
 	function MacLib:LoadAutoLoadConfig()
 		if isStudio or not (isfile and readfile) then return "Config system unavailable." end
@@ -6347,7 +6936,7 @@ end
 			if option.IgnoreConfig then continue end
 
 			table.insert(data.objects, ClassParser[option.Class].Save(flag, option))
-		end	
+		end
 
 		local success, encoded = pcall(HttpService.JSONEncode, HttpService, data)
 		if not success then
@@ -6373,8 +6962,8 @@ end
 
 		for _, option in next, decoded.objects do
 			if ClassParser[option.type] then
-				task.spawn(function() 
-					ClassParser[option.type].Load(option.flag, option) 
+				task.spawn(function()
+					ClassParser[option.type].Load(option.flag, option)
 				end)
 			end
 		end
@@ -6422,6 +7011,117 @@ end
 	ContentProvider:PreloadAsync(assetList)
 	macLib.Enabled = true
 	windowState = true
+
+	do
+		local toggleGui = Instance.new("ScreenGui")
+		toggleGui.Name = "LixHubLogoToggle"
+		toggleGui.ResetOnSpawn = false
+		toggleGui.DisplayOrder = 10000030
+		pcall(function() toggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling end)
+
+		local guiParent = macLib.Parent
+		if not guiParent then
+			pcall(function() guiParent = game:GetService("CoreGui") end)
+		end
+		toggleGui.Parent = guiParent
+
+		local logoBtn = Instance.new("ImageButton")
+		logoBtn.Name = "LogoBtn"
+		logoBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		logoBtn.BackgroundTransparency = 0
+		logoBtn.BorderSizePixel = 0
+		logoBtn.Position = UDim2.new(0, 50, 0, 50)
+		logoBtn.Size = UDim2.new(0, 50, 0, 50)
+		logoBtn.Image = "rbxassetid://139436994731049"
+		logoBtn.ScaleType = Enum.ScaleType.Fit
+		logoBtn.ImageTransparency = 0
+		logoBtn.ZIndex = 10000
+		logoBtn.AutoButtonColor = true
+		logoBtn.Parent = toggleGui
+
+		local logoBtnCorner = Instance.new("UICorner")
+		logoBtnCorner.CornerRadius = UDim.new(1, 0)
+		logoBtnCorner.Parent = logoBtn
+
+		local logoBtnShadow = Instance.new("ImageLabel")
+		logoBtnShadow.BackgroundTransparency = 1
+		logoBtnShadow.Position = UDim2.new(0, -15, 0, -15)
+		logoBtnShadow.Size = UDim2.new(1, 30, 1, 30)
+		logoBtnShadow.ZIndex = logoBtn.ZIndex - 1
+		logoBtnShadow.Image = "rbxassetid://6014261993"
+		logoBtnShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+		logoBtnShadow.ImageTransparency = 0.5
+		logoBtnShadow.ScaleType = Enum.ScaleType.Slice
+		logoBtnShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+		logoBtnShadow.Parent = logoBtn
+
+		local btnDragging = false
+		local btnDragInput
+		local btnDragStart
+		local btnStartPos
+		local btnClickStartPos
+		local btnClickStartTime = 0
+
+		logoBtn.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				btnDragging = true
+				btnDragStart = input.Position
+				btnStartPos = logoBtn.Position
+				btnClickStartPos = logoBtn.Position
+				btnClickStartTime = tick()
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						btnDragging = false
+					end
+				end)
+			end
+		end)
+
+		UserInputService.InputChanged:Connect(function(input)
+			if not btnDragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+				logoBtn.Position = UDim2.new(
+					btnStartPos.X.Scale,
+					btnStartPos.X.Offset + (input.Position.X - btnDragStart.X),
+					btnStartPos.Y.Scale,
+					btnStartPos.Y.Offset + (input.Position.Y - btnDragStart.Y)
+				)
+			end
+		end)
+
+		logoBtn.MouseButton1Up:Connect(function()
+			if btnClickStartPos
+				and (tick() - btnClickStartTime) < 0.2
+				and math.sqrt(
+					(logoBtn.Position.X.Offset - btnClickStartPos.X.Offset) ^ 2
+					+ (logoBtn.Position.Y.Offset - btnClickStartPos.Y.Offset) ^ 2
+				) < 5 then
+				ToggleMenu()
+			end
+			btnClickStartPos = nil
+		end)
+
+		logoBtn.MouseEnter:Connect(function()
+			TweenService:Create(logoBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+				Size = UDim2.new(0, 55, 0, 55),
+				BackgroundColor3 = Color3.fromRGB(55, 55, 55),
+			}):Play()
+		end)
+		logoBtn.MouseLeave:Connect(function()
+			TweenService:Create(logoBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+				Size = UDim2.new(0, 50, 0, 50),
+				BackgroundColor3 = Color3.fromRGB(45, 45, 45),
+			}):Play()
+		end)
+
+		local _origUnload = WindowFunctions.Unload
+		function WindowFunctions:Unload()
+			pcall(function() toggleGui:Destroy() end)
+			_origUnload(self)
+		end
+
+		WindowFunctions.LogoToggleGui = toggleGui
+	end
 
 	return WindowFunctions
 end
