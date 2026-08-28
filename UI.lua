@@ -5681,7 +5681,10 @@ end]]
 		opt = MacLib.Options["__maclib_theme"]
 		if opt then table.insert(data.objects, { type="Dropdown", flag="__maclib_theme", value=opt.Value }) end
 		opt = MacLib.Options["__maclib_uiscale"]
-		if opt then table.insert(data.objects, { type="Input", flag="__maclib_uiscale", value=opt.Value and tostring(opt.Value) }) end
+		if opt then
+			local scaleText = opt.Text or (type(opt.GetInput) == "function" and opt:GetInput()) or nil
+			table.insert(data.objects, { type="Input", flag="__maclib_uiscale", value=scaleText and tostring(scaleText) or nil })
+		end
 		opt = MacLib.Options["__maclib_autohide"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autohide", state=opt.State or false }) end
 		opt = MacLib.Options["__maclib_acrylicblur"]
