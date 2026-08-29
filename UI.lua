@@ -2661,7 +2661,7 @@ end]]
 					end
 					function ToggleFunctions:UpdateState(State)
 						togglebool = State
-						NewState(togglebool)
+						NewState(togglebool, ToggleFunctions.Settings.Callback)
 					end
 					function ToggleFunctions:GetState()
 						return togglebool
@@ -5938,17 +5938,19 @@ end]]
 				SaveGlobalUISettings()
 			end,
 		}, "__maclib_uiscale")
+		local autoHideEnterConn = nil
 		displaySection:Toggle({
 			Name = "Auto-hide",
 			Default = false,
 			Callback = function(state)
 				autoHideEnabled = state
 				if autoHideConn then autoHideConn:Disconnect(); autoHideConn = nil end
+				if autoHideEnterConn then autoHideEnterConn:Disconnect(); autoHideEnterConn = nil end
 				if state then
 					autoHideConn = base.MouseLeave:Connect(function()
 						if autoHideEnabled then WindowFunctions:SetState(false) end
 					end)
-					base.MouseEnter:Connect(function()
+					autoHideEnterConn = base.MouseEnter:Connect(function()
 						if autoHideEnabled then WindowFunctions:SetState(true) end
 					end)
 				end
@@ -7025,7 +7027,12 @@ end]]
 		table.insert(assetList, assetId)
 	end
 
-	ContentProvider:PreloadAsync(assetList)
+	-- PreloadAsync is blocking — if it stalls on teleport it freezes the entire
+	-- Roblox client (black screen, no input, console won't open). Run it off the
+	-- main thread so the UI and game can continue loading regardless.
+	task.spawn(function()
+		pcall(function() ContentProvider:PreloadAsync(assetList) end)
+	end)
 	macLib.Enabled = true
 	windowState = true
 
