@@ -5671,7 +5671,10 @@ end]]
 	end
 	local GLOBAL_UI_PATH = "LixHub/ui_settings.json"
 
+	local _isLoadingUISettings = false
+
 	local function SaveGlobalUISettings()
+		if _isLoadingUISettings then return end
 		if isStudio or not writefile then return end
 		if isfolder and not isfolder("LixHub") then
 			if makefolder then pcall(makefolder, "LixHub") end
@@ -5991,7 +5994,9 @@ end]]
 			end,
 		}, "__maclib_togglekey")
 
-		task.delay(0.5, LoadGlobalUISettings)
+		_isLoadingUISettings = true
+		LoadGlobalUISettings()
+		_isLoadingUISettings = false
 	end
 
 	function WindowFunctions:Notify(Settings)
