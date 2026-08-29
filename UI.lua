@@ -1761,6 +1761,9 @@ end]]
 	end
 
 	local function UpdateOrientation(fetchProps)
+		local liveCamera = workspace.CurrentCamera
+		if not liveCamera or not liveCamera.Parent then return end
+
 		if not IsVisible(frame) or not acrylicBlur or unloaded then
 			for _, pt in pairs(parts) do
 				pt.Parent = nil
@@ -1797,15 +1800,15 @@ end]]
 			end
 		end
 		DrawQuad(
-			camera:ScreenPointToRay(tl.x, tl.y, zIndex).Origin,
-			camera:ScreenPointToRay(tr.x, tr.y, zIndex).Origin,
-			camera:ScreenPointToRay(bl.x, bl.y, zIndex).Origin,
-			camera:ScreenPointToRay(br.x, br.y, zIndex).Origin,
+			liveCamera:ScreenPointToRay(tl.x, tl.y, zIndex).Origin,
+			liveCamera:ScreenPointToRay(tr.x, tr.y, zIndex).Origin,
+			liveCamera:ScreenPointToRay(bl.x, bl.y, zIndex).Origin,
+			liveCamera:ScreenPointToRay(br.x, br.y, zIndex).Origin,
 			parts
 		)
 		if fetchProps then
 			for _, pt in pairs(parts) do
-				pt.Parent = camera
+				pt.Parent = liveCamera
 			end
 			for propName, propValue in pairs(properties) do
 				for _, pt in pairs(parts) do
@@ -6638,9 +6641,6 @@ end]]
 		return _appliedScale
 	end
 
-	-- Load saved UI settings here, after SetScale (and all other WindowFunctions
-	-- methods) are defined. Previously this ran inside the settings `do` block at
-	-- line ~5998, before SetScale existed, so the saved scale was silently dropped.
 	_isLoadingUISettings = true
 	LoadGlobalUISettings()
 	_isLoadingUISettings = false
@@ -7027,9 +7027,6 @@ end]]
 		table.insert(assetList, assetId)
 	end
 
-	-- PreloadAsync is blocking — if it stalls on teleport it freezes the entire
-	-- Roblox client (black screen, no input, console won't open). Run it off the
-	-- main thread so the UI and game can continue loading regardless.
 	task.spawn(function()
 		pcall(function() ContentProvider:PreloadAsync(assetList) end)
 	end)
