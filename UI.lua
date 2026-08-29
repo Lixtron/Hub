@@ -228,7 +228,14 @@ task.spawn(function()
 end)
 
 local function GetGui()
+	local GUI_NAME = "__MacLibGui"
+	local function destroyExisting(parent)
+		if not parent then return end
+		local existing = parent:FindFirstChild(GUI_NAME)
+		if existing then pcall(function() existing:Destroy() end) end
+	end
 	local newGui = Instance.new("ScreenGui")
+	newGui.Name = GUI_NAME
 	newGui.ScreenInsets = Enum.ScreenInsets.None
 	newGui.ResetOnSpawn = false
 	newGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -263,6 +270,7 @@ local function GetGui()
 	local function trySetParent(getParent)
 		local ok, parent = pcall(getParent)
 		if not ok or not parent then return false end
+		destroyExisting(parent)
 		pcall(function() newGui.Parent = parent end)
 		if newGui.Parent == nil then return false end
 		local inGame = false
