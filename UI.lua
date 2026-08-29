@@ -5994,9 +5994,6 @@ end]]
 			end,
 		}, "__maclib_togglekey")
 
-		_isLoadingUISettings = true
-		LoadGlobalUISettings()
-		_isLoadingUISettings = false
 	end
 
 	function WindowFunctions:Notify(Settings)
@@ -6638,6 +6635,13 @@ end]]
 	function WindowFunctions:GetScale()
 		return _appliedScale
 	end
+
+	-- Load saved UI settings here, after SetScale (and all other WindowFunctions
+	-- methods) are defined. Previously this ran inside the settings `do` block at
+	-- line ~5998, before SetScale existed, so the saved scale was silently dropped.
+	_isLoadingUISettings = true
+	LoadGlobalUISettings()
+	_isLoadingUISettings = false
 
 	local _keyTimerConn = nil
 	local _lastKeyExpiresAt = nil
