@@ -5950,20 +5950,32 @@ end]]
 			end,
 		}, "__maclib_uiscale")
 		local autoHideEnterConn = nil
+		local function applyAutoHideConnections(state)
+			if autoHideConn then autoHideConn:Disconnect(); autoHideConn = nil end
+			if autoHideEnterConn then autoHideEnterConn:Disconnect(); autoHideEnterConn = nil end
+			if state then
+				autoHideConn = base.MouseLeave:Connect(function()
+					if autoHideEnabled then WindowFunctions:SetState(false) end
+				end)
+				autoHideEnterConn = base.MouseEnter:Connect(function()
+					if autoHideEnabled then WindowFunctions:SetState(true) end
+				end)
+			end
+		end
 		displaySection:Toggle({
 			Name = "Auto-hide",
 			Default = false,
 			Callback = function(state)
 				autoHideEnabled = state
-				if autoHideConn then autoHideConn:Disconnect(); autoHideConn = nil end
-				if autoHideEnterConn then autoHideEnterConn:Disconnect(); autoHideEnterConn = nil end
-				if state then
-					autoHideConn = base.MouseLeave:Connect(function()
-						if autoHideEnabled then WindowFunctions:SetState(false) end
+				if _isLoadingUISettings then
+					-- Defer wiring the connections until after all settings have
+					-- finished loading, so a MouseLeave fired during startup does
+					-- not immediately hide the UI.
+					task.defer(function()
+						applyAutoHideConnections(autoHideEnabled)
 					end)
-					autoHideEnterConn = base.MouseEnter:Connect(function()
-						if autoHideEnabled then WindowFunctions:SetState(true) end
-					end)
+				else
+					applyAutoHideConnections(state)
 				end
 				SaveGlobalUISettings()
 			end,
