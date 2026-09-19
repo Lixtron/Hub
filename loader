@@ -39,6 +39,11 @@ local scripts = {
 		ffa = false,
 		script_id = "79cd2cfb6a8e0410f8d173691ac5affe",
 	},
+	[12851171] = {
+		name = "Slayers 2",
+		ffa = false,
+		script_id = "e9b5a1c2f839972aa230cbd4c29dc423",
+	},
 }
 
 local current = scripts[game.CreatorId]
