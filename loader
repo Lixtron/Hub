@@ -44,6 +44,11 @@ local scripts = {
 		ffa = false,
 		script_id = "e9b5a1c2f839972aa230cbd4c29dc423",
 	},
+	[35186067] = {
+		name = "Re://Adventures",
+		ffa = false,
+		script_id = "d19cdd5d7e1bb03101e7b15381c88777",
+	},
 }
 
 local current = scripts[game.CreatorId]
