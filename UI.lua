@@ -3844,6 +3844,12 @@ end]]
 							end
 						end
 
+						if #selectedOptions > 0 then
+							dropdownName.Text = DropdownFunctions.Settings.Name .. " • " .. table.concat(selectedOptions, ", ")
+						else
+							dropdownName.Text = DropdownFunctions.Settings.Name .. "..."
+						end
+
 						if DropdownFunctions.Settings.Callback then
 							if DropdownFunctions.Settings.Multi then
 								local Return = {}
