@@ -19,8 +19,8 @@ local scripts = {
 
 	[9190691] = {
 		name = "Anime Squadron",
-		ffa = true,
-		url = "https://api.luarmor.net/files/v4/loaders/2687bfdac44a8af920b0137a331c8b33.lua",
+		ffa = false,
+		script_id = "2687bfdac44a8af920b0137a331c8b33",
 	},
 
 	[17347863] = {
