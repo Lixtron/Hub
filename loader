@@ -81,7 +81,7 @@ getgenv().LixHub = {
 	script_id = current.script_id,
 	creator_id = game.CreatorId,
 	linkvertise = "https://ads.luarmor.net/get_key?for=LixHub_Key__Linkvertise-WEFGHDrpehny",
-	workink = "https://ads.luarmor.net/get_key?for=LixHub_Key__Workink-ZXdPspKIwbVr",
+	workink = "https://ads.luarmor.net/get_key?for=LixHub_Key__LootLabs-dcrcsXfaDhbB",
 }
 
 loadstring(game:HttpGet(
