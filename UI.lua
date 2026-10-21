@@ -311,6 +311,7 @@ end
 
 function MacLib:Window(Settings)
 	local WindowFunctions = {Settings = Settings}
+	local disableAutoExecute = Settings.DisableAutoExecute == true or Settings.disableAutoExecute == true
 	if Settings.AcrylicBlur ~= nil then
 		acrylicBlur = Settings.AcrylicBlur
 	else
@@ -319,6 +320,9 @@ function MacLib:Window(Settings)
 
 	local _autoExecEnabled  = false
 	local _autoExecQueued   = false
+	if disableAutoExecute then
+		getgenv().__LIXHUB_AUTOEXEC_ENABLED = false
+	end
 	local _AUTO_EXEC_LOADER = [[
 getgenv().__LIXHUB_AUTOEXEC_QUEUED = nil
 if getgenv().__LIXHUB_AUTOEXEC_ENABLED ~= false then
@@ -5715,7 +5719,7 @@ end]]
 			table.insert(data.objects, { type="Keybind", flag="__maclib_togglekey", bind=(typeof(bind)=="EnumItem" and bind.Name) or nil })
 		end
 		opt = MacLib.Options["__maclib_autoexecute"]
-		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autoexecute", state=opt.State or false }) end
+		if opt and not disableAutoExecute then table.insert(data.objects, { type="Toggle", flag="__maclib_autoexecute", state=opt.State or false }) end
 		opt = MacLib.Options["__maclib_autorejoin"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autorejoin", state=opt.State or false }) end
 		local ok, encoded = pcall(HttpService.JSONEncode, HttpService, data)
@@ -5770,7 +5774,7 @@ end]]
 			end
 		end
 		local aeOpt = MacLib.Options["__maclib_autoexecute"]
-		if loaded["__maclib_autoexecute"] and aeOpt then
+		if not disableAutoExecute and loaded["__maclib_autoexecute"] and aeOpt then
 			pcall(function() _autoExecApply(aeOpt.State == true) end)
 		end
 		local arOpt = MacLib.Options["__maclib_autorejoin"]
@@ -5996,15 +6000,17 @@ end]]
 		}, "__maclib_acrylicblur")
 
 		local automationSection = settingsTab:Section({ Name = "Automation", Side = "Left" })
-		automationSection:Toggle({
-			Name = "Auto Execute",
-			Description = "Re-runs the loader automatically on teleport.",
-			Default = false,
-			Callback = function(state)
-				_autoExecApply(state)
-				SaveGlobalUISettings()
-			end,
-		}, "__maclib_autoexecute")
+		if not disableAutoExecute then
+			automationSection:Toggle({
+				Name = "Auto Execute",
+				Description = "Re-runs the loader automatically on teleport.",
+				Default = false,
+				Callback = function(state)
+					_autoExecApply(state)
+					SaveGlobalUISettings()
+				end,
+			}, "__maclib_autoexecute")
+		end
 		automationSection:Toggle({
 			Name = "Auto Rejoin",
 			Description = "Automatically rejoins a server on disconnect.",
