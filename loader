@@ -44,10 +44,10 @@ local scripts = {
 		ffa = false,
 		script_id = "e9b5a1c2f839972aa230cbd4c29dc423",
 	},
-	[35186067] = {
-		name = "Re://Adventures",
+	[10611639] = {
+		name = "Anime Adventures",
 		ffa = false,
-		script_id = "d19cdd5d7e1bb03101e7b15381c88777",
+		script_id = "9337ddc47d79861fb00f57784e1ed092",
 	},
 }
 
