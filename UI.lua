@@ -6000,10 +6000,11 @@ end]]
 				end
 
 				task.spawn(function()
+				local lastExpiresAt, lastTier = WindowFunctions:GetKeyTimer()
 					local api2 = getgenv().__LixHubApi
 					if type(api2) ~= "table" or type(api2.check_key) ~= "function" then
-						if _lastKeyExpiresAt ~= nil then
-							WindowFunctions:SetKeyTimer(_lastKeyExpiresAt, _lastKeyTier)
+					if lastExpiresAt ~= nil then
+						WindowFunctions:SetKeyTimer(lastExpiresAt, lastTier)
 							WindowFunctions:Notify({
 								Title = "Key",
 								Description = "Timer refreshed.",
@@ -6030,15 +6031,15 @@ end]]
 					end
 
 					if status.code == "KEY_VALID" then
-						local expiresAt = status.expires_at or status.expiry or status.expire or _lastKeyExpiresAt
-						local tier = status.tier or _lastKeyTier
+					local expiresAt = status.expires_at or status.expiry or status.expire or lastExpiresAt
+					local tier = status.tier or lastTier
 						WindowFunctions:SetKeyTimer(expiresAt, tier)
 						WindowFunctions:Notify({
 							Title = "Key",
 							Description = "Timer updated.",
 						})
 					elseif status.code == "KEY_EXPIRED" then
-						WindowFunctions:SetKeyTimer(0, _lastKeyTier)
+					WindowFunctions:SetKeyTimer(0, lastTier)
 						WindowFunctions:Notify({
 							Title = "Key",
 							Description = "Your key has expired.",
@@ -7070,6 +7071,9 @@ end]]
 
 	updateTimer()
 	_keyTimerConn = RunService.Heartbeat:Connect(updateTimer)
+	end
+	function WindowFunctions:GetKeyTimer()
+		return _lastKeyExpiresAt, _lastKeyTier
 	end
 	local ClassParser = {
 		["Toggle"] = {
