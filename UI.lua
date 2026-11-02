@@ -646,7 +646,7 @@ end]]
 	uIPadding.Parent = controls
 
 	local windowControlSettings = {
-		sizes = { enabled = UDim2.fromOffset(8, 8), disabled = UDim2.fromOffset(7, 7) },
+		sizes = { enabled = UDim2.fromOffset(10, 10), disabled = UDim2.fromOffset(9, 9) },
 		transparencies = { enabled = 0, disabled = 1 },
 		strokeTransparency = 0.9,
 	}
@@ -659,10 +659,10 @@ end]]
 
 	local exit = Instance.new("TextButton")
 	exit.Name = "Exit"
-	exit.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
-	exit.Text = ""
-	exit.TextColor3 = Color3.fromRGB(0, 0, 0)
-	exit.TextSize = 14
+	exit.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	exit.Text = "×"
+	exit.TextColor3 = Color3.fromRGB(255, 255, 255)
+	exit.TextSize = 9
 	exit.AutoButtonColor = false
 	exit.BackgroundColor3 = Color3.fromRGB(250, 93, 86)
 	exit.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -677,10 +677,10 @@ end]]
 
 	local minimize = Instance.new("TextButton")
 	minimize.Name = "Minimize"
-	minimize.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
-	minimize.Text = ""
-	minimize.TextColor3 = Color3.fromRGB(0, 0, 0)
-	minimize.TextSize = 14
+	minimize.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	minimize.Text = "−"
+	minimize.TextColor3 = Color3.fromRGB(255, 255, 255)
+	minimize.TextSize = 9
 	minimize.AutoButtonColor = false
 	minimize.BackgroundColor3 = Color3.fromRGB(252, 190, 57)
 	minimize.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -719,6 +719,7 @@ end]]
 
 		button.Size = size
 		button.BackgroundTransparency = transparency
+		button.TextTransparency = transparency
 		button.Active = enabled
 		button.Interactable = enabled
 
