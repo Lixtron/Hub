@@ -1998,6 +1998,17 @@ end]]
 				stroke.Transparency = math.min((t.strokeTrans or 0.8) + 0.08, 0.92)
 			end
 		end
+		if compactGui then
+			local circle = compactGui:FindFirstChild("CircleToggle", true)
+			if circle then
+				circle.BackgroundColor3 = t.base
+				local circleStroke = circle:FindFirstChild("CircleStroke")
+				if circleStroke then
+					circleStroke.Color = t.stroke
+					circleStroke.Transparency = t.strokeTrans or 0.8
+				end
+			end
+		end
 
 		UpdateOrientation(true)
 	end
@@ -7332,6 +7343,106 @@ end]]
 		end
 		compactGui.Parent = guiParent
 
+		local circleToggle = Instance.new("ImageButton")
+		circleToggle.Name = "CircleToggle"
+		circleToggle.Active = true
+		circleToggle.AutoButtonColor = false
+		circleToggle.BackgroundColor3 = theme.base
+		circleToggle.BackgroundTransparency = 0
+		circleToggle.BorderSizePixel = 0
+		circleToggle.Position = UDim2.fromOffset(14, 64)
+		circleToggle.Size = UDim2.fromOffset(46, 46)
+		circleToggle.Image = "rbxassetid://139436994731049"
+		circleToggle.ImageTransparency = 0
+		circleToggle.ScaleType = Enum.ScaleType.Fit
+		circleToggle.ZIndex = 10020
+		circleToggle.Parent = compactGui
+
+		local circleCorner = Instance.new("UICorner")
+		circleCorner.CornerRadius = UDim.new(1, 0)
+		circleCorner.Parent = circleToggle
+
+		local circleStroke = Instance.new("UIStroke")
+		circleStroke.Name = "CircleStroke"
+		circleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		circleStroke.Color = theme.stroke
+		circleStroke.Transparency = theme.strokeTrans or 0.8
+		circleStroke.Parent = circleToggle
+
+		local circleShadow = Instance.new("ImageLabel")
+		circleShadow.Name = "Shadow"
+		circleShadow.BackgroundTransparency = 1
+		circleShadow.Position = UDim2.new(0, -12, 0, -12)
+		circleShadow.Size = UDim2.new(1, 24, 1, 24)
+		circleShadow.Image = "rbxassetid://6014261993"
+		circleShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+		circleShadow.ImageTransparency = 0.42
+		circleShadow.ScaleType = Enum.ScaleType.Slice
+		circleShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+		circleShadow.ZIndex = circleToggle.ZIndex - 1
+		circleShadow.Parent = circleToggle
+
+		local function clampCircleToggle()
+			if not circleToggle.Parent then return end
+			local viewport = getViewportSize()
+			local size = circleToggle.AbsoluteSize
+			local margin = 8
+			local x = math.clamp(circleToggle.AbsolutePosition.X, margin, math.max(margin, viewport.X - size.X - margin))
+			local y = math.clamp(circleToggle.AbsolutePosition.Y, margin, math.max(margin, viewport.Y - size.Y - margin))
+			circleToggle.Position = UDim2.fromOffset(x, y)
+		end
+
+		local circleDragging = false
+		local circleMoved = false
+		local circleDragStart
+		local circleStartPosition
+		local circleInputConnection
+
+		circleToggle.InputBegan:Connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+			circleDragging = true
+			circleMoved = false
+			circleDragStart = input.Position
+			circleStartPosition = circleToggle.Position
+			input.Changed:Connect(function()
+				if input.UserInputState ~= Enum.UserInputState.End then return end
+				circleDragging = false
+				task.defer(clampCircleToggle)
+			end)
+		end)
+
+		circleInputConnection = UserInputService.InputChanged:Connect(function(input)
+			if not circleDragging then return end
+			if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+			local delta = input.Position - circleDragStart
+			if delta.Magnitude > 5 then circleMoved = true end
+			circleToggle.Position = UDim2.new(
+				circleStartPosition.X.Scale,
+				circleStartPosition.X.Offset + delta.X,
+				circleStartPosition.Y.Scale,
+				circleStartPosition.Y.Offset + delta.Y
+			)
+		end)
+
+		circleToggle.Activated:Connect(function()
+			if not circleMoved then ToggleMenu() end
+		end)
+		circleToggle.MouseEnter:Connect(function()
+			TweenService:Create(circleToggle, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+				Size = UDim2.fromOffset(49, 49),
+			}):Play()
+		end)
+		circleToggle.MouseLeave:Connect(function()
+			TweenService:Create(circleToggle, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+				Size = UDim2.fromOffset(46, 46),
+			}):Play()
+		end)
+		compactGui.Destroying:Connect(function()
+			if circleInputConnection then circleInputConnection:Disconnect() end
+		end)
+		WindowFunctions._ClampCircleToggle = clampCircleToggle
+		WindowFunctions.LogoToggleButton = circleToggle
+
 		compactBar = Instance.new("CanvasGroup")
 		compactBar.Name = "CompactTopbar"
 		compactBar.Active = true
@@ -7568,6 +7679,7 @@ end]]
 			task.defer(clampWindowToViewport)
 			if updateCompactLayout then updateCompactLayout() end
 			if clampCompactBar then task.defer(clampCompactBar) end
+			if WindowFunctions._ClampCircleToggle then task.defer(WindowFunctions._ClampCircleToggle) end
 		end)
 	end
 
