@@ -22,6 +22,7 @@ local ContentProvider = MacLib.GetService("ContentProvider")
 local UserInputService = MacLib.GetService("UserInputService")
 local Lighting = MacLib.GetService("Lighting")
 local Players = MacLib.GetService("Players")
+local Workspace = MacLib.GetService("Workspace")
 
 local isStudio = RunService:IsStudio()
 local LocalPlayer = Players.LocalPlayer
@@ -472,7 +473,7 @@ end]]
 	notificationsUIPadding.PaddingTop = UDim.new(0, 10)
 	notificationsUIPadding.Parent = notifications
 
-	local base = Instance.new("Frame")
+	local base = Instance.new("CanvasGroup")
 	base.Name = "Base"
 	base.Active = true
 	base.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -481,12 +482,69 @@ end]]
 	base.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	base.BorderSizePixel = 0
 	base.Position = UDim2.fromScale(0.5, 0.5)
-	base.Size = Settings.Size or UDim2.fromOffset(740, 560)
+	local _windowBaseSize = Settings.Size or UDim2.fromOffset(740, 560)
+	base.Size = _windowBaseSize
 
 	local baseUIScale = Instance.new("UIScale")
 	baseUIScale.Name = "BaseUIScale"
 	baseUIScale.Parent = base
-	local _appliedScale = 1
+	local _manualScale = false
+	local _viewportConnection = nil
+	local compactBar = nil
+	local compactGui = nil
+	local _loadedCompactPosition = nil
+	local _compactFPSConnection = nil
+	local _compactInputConnection = nil
+	local updateCompactLayout = nil
+	local clampCompactBar = nil
+	local compactScale = nil
+	local _stateAnimationId = 0
+	local _compactBlurCleanup = nil
+
+	local function getViewportSize()
+		local camera = Workspace and Workspace.CurrentCamera
+		return camera and camera.ViewportSize or Vector2.new(1280, 720)
+	end
+
+	local function calculateAutomaticScale()
+		local viewport = getViewportSize()
+		local width = _windowBaseSize.X.Offset > 0 and _windowBaseSize.X.Offset or 740
+		local height = _windowBaseSize.Y.Offset > 0 and _windowBaseSize.Y.Offset or 560
+		local horizontalMargin = UserInputService.TouchEnabled and 24 or 40
+		local verticalMargin = UserInputService.TouchEnabled and 36 or 56
+		return math.clamp(math.min(
+			(viewport.X - horizontalMargin) / width,
+			(viewport.Y - verticalMargin) / height,
+			1
+		), 0.5, 1)
+	end
+
+	local _appliedScale = calculateAutomaticScale()
+	baseUIScale.Scale = _appliedScale
+
+	local function clampWindowToViewport()
+		local viewport = getViewportSize()
+		local width = (_windowBaseSize.X.Offset > 0 and _windowBaseSize.X.Offset or 740) * _appliedScale
+		local height = (_windowBaseSize.Y.Offset > 0 and _windowBaseSize.Y.Offset or 560) * _appliedScale
+		local halfWidth, halfHeight = width / 2, height / 2
+		local margin = 8
+		local currentCenter = base.AbsolutePosition + base.AbsoluteSize / 2
+		if currentCenter.X == 0 and currentCenter.Y == 0 then
+			currentCenter = viewport / 2
+		end
+		local minX, maxX = halfWidth + margin, viewport.X - halfWidth - margin
+		local minY, maxY = halfHeight + margin, viewport.Y - halfHeight - margin
+		local x = minX > maxX and viewport.X / 2 or math.clamp(currentCenter.X, minX, maxX)
+		local y = minY > maxY and viewport.Y / 2 or math.clamp(currentCenter.Y, minY, maxY)
+		base.Position = UDim2.fromOffset(x, y)
+	end
+
+	local function applyAutomaticScale()
+		if _manualScale then return end
+		_appliedScale = calculateAutomaticScale()
+		baseUIScale.Scale = _appliedScale
+		task.defer(clampWindowToViewport)
+	end
 
 	local baseUICorner = Instance.new("UICorner")
 	baseUICorner.Name = "BaseUICorner"
@@ -1020,7 +1078,7 @@ end]]
 	content.Size = UDim2.fromScale(0.675, 1)
 
 	local resizingContent = false
-	local _baseSize = Settings.Size or UDim2.fromOffset(740, 560)
+	local _baseSize = _windowBaseSize
 	local _baseW = _baseSize.X.Offset > 0 and _baseSize.X.Offset or 740
 	local defaultSidebarWidth = math.floor(_baseW * 0.325)
 	local initialMouseX, initialSidebarWidth
@@ -1772,6 +1830,8 @@ end]]
 		return true
 	end
 
+	local compactAcrylicVisible = false
+
 	local function UpdateOrientation(fetchProps)
 		local liveCamera = workspace.CurrentCamera
 		if not liveCamera or not liveCamera.Parent then return end
@@ -1779,8 +1839,10 @@ end]]
 		if not IsVisible(frame) or not acrylicBlur or unloaded then
 			for _, pt in pairs(parts) do
 				pt.Parent = nil
-				DepthOfField.Enabled = false
-				DepthOfField.Parent = nil
+				if not compactAcrylicVisible then
+					DepthOfField.Enabled = false
+					DepthOfField.Parent = nil
+				end
 			end
 			return
 		end
@@ -1834,6 +1896,73 @@ end]]
 
 	RunService.RenderStepped:Connect(UpdateOrientation)
 
+	local function BindAcrylicTarget(target)
+		local targetFrame = Instance.new("Frame")
+		targetFrame.Name = "CompactAcrylicTarget"
+		targetFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+		targetFrame.BackgroundTransparency = 1
+		targetFrame.Position = UDim2.fromScale(0.5, 0.5)
+		targetFrame.Size = UDim2.new(1, -4, 1, -4)
+		targetFrame.ZIndex = 0
+		targetFrame.Parent = target
+
+		local targetParts = {}
+
+		local function updateTarget(fetchProps)
+			local liveCamera = workspace.CurrentCamera
+			if not liveCamera or not liveCamera.Parent then return end
+			compactAcrylicVisible = IsVisible(targetFrame) and acrylicBlur and not unloaded
+			if not compactAcrylicVisible then
+				for _, pt in pairs(targetParts) do
+					pt.Parent = nil
+				end
+				if not IsVisible(frame) or not acrylicBlur then
+					DepthOfField.Enabled = false
+					DepthOfField.Parent = nil
+				end
+				return
+			end
+
+			if not DepthOfField.Parent then
+				DepthOfField.Parent = Lighting
+			end
+			DepthOfField.Enabled = true
+
+			local tl = targetFrame.AbsolutePosition
+			local br = targetFrame.AbsolutePosition + targetFrame.AbsoluteSize
+			local tr = Vector2.new(br.x, tl.y)
+			local bl = Vector2.new(tl.x, br.y)
+			local zIndex = 1 - 0.05 * targetFrame.ZIndex
+			DrawQuad(
+				liveCamera:ScreenPointToRay(tl.x, tl.y, zIndex).Origin,
+				liveCamera:ScreenPointToRay(tr.x, tr.y, zIndex).Origin,
+				liveCamera:ScreenPointToRay(bl.x, bl.y, zIndex).Origin,
+				liveCamera:ScreenPointToRay(br.x, br.y, zIndex).Origin,
+				targetParts
+			)
+
+			if fetchProps then
+				local transparency = (_acrylicCustomTrans ~= nil) and _acrylicCustomTrans or theme.acrylicTrans
+				for _, pt in pairs(targetParts) do
+					pt.Parent = liveCamera
+					pt.Transparency = transparency
+					pt.BrickColor = BrickColor.new(theme.acrylicTint)
+				end
+			end
+		end
+
+		updateTarget(true)
+		local connection = RunService.RenderStepped:Connect(updateTarget)
+		return function()
+			connection:Disconnect()
+			compactAcrylicVisible = false
+			for _, pt in pairs(targetParts) do
+				pcall(function() pt:Destroy() end)
+			end
+			pcall(function() targetFrame:Destroy() end)
+		end
+	end
+
 	function WindowFunctions:SetTheme(newTheme)
 		local t = resolveTheme({ Theme = newTheme })
 		theme = t
@@ -1858,6 +1987,16 @@ end]]
 		globalSettingsUIStroke.Color     = t.stroke
 
 		searchResults.BackgroundColor3 = t.searchBg
+
+		if compactBar then
+			compactBar.BackgroundColor3 = t.base
+			compactBar.BackgroundTransparency = acrylicBlur and t.baseTrans or 0
+			local stroke = compactBar:FindFirstChild("CompactStroke")
+			if stroke then
+				stroke.Color = t.stroke
+				stroke.Transparency = math.min((t.strokeTrans or 0.8) + 0.08, 0.92)
+			end
+		end
 
 		UpdateOrientation(true)
 	end
@@ -5701,11 +5840,19 @@ end]]
 			if makefolder then pcall(makefolder, "LixHub") end
 		end
 		local data = { objects = {} }
+		if compactBar then
+			data.compactPosition = {
+				xScale = compactBar.Position.X.Scale,
+				xOffset = compactBar.Position.X.Offset,
+				yScale = compactBar.Position.Y.Scale,
+				yOffset = compactBar.Position.Y.Offset,
+			}
+		end
 		local opt
 		opt = MacLib.Options["__maclib_theme"]
 		if opt then table.insert(data.objects, { type="Dropdown", flag="__maclib_theme", value=opt.Value }) end
 		opt = MacLib.Options["__maclib_uiscale"]
-		if opt then
+		if opt and _manualScale then
 			local scaleText = opt.Text or (type(opt.GetInput) == "function" and opt:GetInput()) or nil
 			table.insert(data.objects, { type="Input", flag="__maclib_uiscale", value=scaleText and tostring(scaleText) or nil })
 		end
@@ -5733,6 +5880,9 @@ end]]
 		if not readOk or type(raw) ~= "string" or raw == "" then return end
 		local ok, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
 		if not ok or type(decoded) ~= "table" or type(decoded.objects) ~= "table" then return end
+		if type(decoded.compactPosition) == "table" then
+			_loadedCompactPosition = decoded.compactPosition
+		end
 		local loaders = {
 			Dropdown = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateSelection(o.value) end end,
 			Slider   = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateValue(tonumber(o.value) or o.value) end end,
@@ -5938,10 +6088,11 @@ end]]
 		})
 
 		local displaySection = settingsTab:Section({ Name = "Display", Side = "Right" })
+		local automaticScaleText = string.format("%.2f", _appliedScale):gsub("0+$", ""):gsub("%.$", "")
 		displaySection:Input({
 			Name = "UI Scale",
-			Default = "1.0",
-			CharacterLimit = 3,
+			Default = automaticScaleText,
+			CharacterLimit = 4,
 			AcceptedCharacters = function(value)
 				local cleaned = value:gsub("[^%d%.]", "")
 				local dotCount = 0
@@ -5949,7 +6100,7 @@ end]]
 					dotCount = dotCount + 1
 					return dotCount == 1 and "." or ""
 				end)
-				return cleaned:sub(1, 3)
+				return cleaned:sub(1, 4)
 			end,
 			Callback = function(value)
 				local n = tonumber(value)
@@ -6022,7 +6173,7 @@ end]]
 		}, "__maclib_autorejoin")
 
 		displaySection:Keybind({
-			Name = "Toggle Key",
+			Name = "Minimize Bind",
 			Default = MenuKeybind,
 			Callback = function(key)
 				MenuKeybind = key
@@ -6535,8 +6686,77 @@ end]]
 	end
 
 	function WindowFunctions:SetState(State)
+		if windowState == State then return end
+		_stateAnimationId = _stateAnimationId + 1
+		local animationId = _stateAnimationId
 		windowState = State
-		base.Visible = State
+
+		if not compactBar or not compactScale then
+			base.Visible = State
+			return
+		end
+
+		local restingPosition = compactBar.Position
+		local baseCenter = base.AbsolutePosition + base.AbsoluteSize / 2
+		if baseCenter.X == 0 and baseCenter.Y == 0 then
+			baseCenter = getViewportSize() / 2
+		end
+		local transitionPosition = UDim2.fromOffset(baseCenter.X, baseCenter.Y - 22)
+
+		if State then
+			base.Visible = true
+			base.GroupTransparency = 1
+			baseUIScale.Scale = _appliedScale * 0.94
+			compactBar.Visible = true
+			compactBar.GroupTransparency = 0
+			TweenService:Create(base, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				GroupTransparency = 0,
+			}):Play()
+			TweenService:Create(baseUIScale, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				Scale = _appliedScale,
+			}):Play()
+			TweenService:Create(compactBar, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+				Position = transitionPosition,
+				GroupTransparency = 1,
+			}):Play()
+			TweenService:Create(compactScale, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+				Scale = 0.72,
+			}):Play()
+			task.delay(0.21, function()
+				if animationId ~= _stateAnimationId or not compactBar then return end
+				compactBar.Visible = false
+				compactBar.Position = restingPosition
+				compactBar.GroupTransparency = 0
+				compactScale.Scale = 1
+			end)
+		else
+			compactBar.Position = transitionPosition
+			compactBar.GroupTransparency = 1
+			compactScale.Scale = 0.72
+			compactBar.Visible = true
+			base.Visible = true
+			base.GroupTransparency = 0
+			TweenService:Create(base, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+				GroupTransparency = 1,
+			}):Play()
+			TweenService:Create(baseUIScale, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+				Scale = _appliedScale * 0.94,
+			}):Play()
+			TweenService:Create(compactBar, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				Position = restingPosition,
+				GroupTransparency = 0,
+			}):Play()
+			TweenService:Create(compactScale, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				Scale = 1,
+			}):Play()
+			task.delay(0.21, function()
+				if animationId ~= _stateAnimationId then return end
+				base.Visible = false
+				base.GroupTransparency = 0
+				baseUIScale.Scale = _appliedScale
+				if clampCompactBar then clampCompactBar() end
+			end)
+		end
 	end
 
 	function WindowFunctions:GetState()
@@ -6560,6 +6780,26 @@ end]]
 		end
 		if onUnloadCallback then
 			onUnloadCallback()
+		end
+		if _viewportConnection then
+			_viewportConnection:Disconnect()
+			_viewportConnection = nil
+		end
+		if _compactFPSConnection then
+			_compactFPSConnection:Disconnect()
+			_compactFPSConnection = nil
+		end
+		if _compactInputConnection then
+			_compactInputConnection:Disconnect()
+			_compactInputConnection = nil
+		end
+		if _compactBlurCleanup then
+			_compactBlurCleanup()
+			_compactBlurCleanup = nil
+		end
+		if compactGui then
+			pcall(function() compactGui:Destroy() end)
+			compactGui = nil
 		end
 		macLib:Destroy()
 		unloaded = true
@@ -6613,7 +6853,10 @@ end]]
 
 	function WindowFunctions:SetAcrylicBlurState(State)
 		acrylicBlur = State
-		base.BackgroundTransparency = State and 0.05 or 0
+		base.BackgroundTransparency = State and theme.baseTrans or 0
+		if compactBar then
+			compactBar.BackgroundTransparency = State and theme.baseTrans or 0
+		end
 	end
 
 	function WindowFunctions:GetAcrylicBlurState()
@@ -6659,15 +6902,20 @@ end]]
 	end
 
 	function WindowFunctions:SetSize(Size)
+		_windowBaseSize = Size
 		base.Size = Size
+		applyAutomaticScale()
+		task.defer(clampWindowToViewport)
 	end
 	function WindowFunctions:GetSize(Size)
 		return base.Size
 	end
 
 	function WindowFunctions:SetScale(Scale)
+		_manualScale = true
 		baseUIScale.Scale = Scale
 		_appliedScale = Scale
+		task.defer(clampWindowToViewport)
 	end
 	function WindowFunctions:GetScale()
 		return _appliedScale
@@ -6676,6 +6924,7 @@ end]]
 	_isLoadingUISettings = true
 	LoadGlobalUISettings()
 	_isLoadingUISettings = false
+	applyAutomaticScale()
 
 	local _keyTimerConn = nil
 	local _lastKeyExpiresAt = nil
@@ -7065,115 +7314,256 @@ end]]
 	macLib.Enabled = true
 	windowState = true
 
-	do
-		local toggleGui = Instance.new("ScreenGui")
-		toggleGui.Name = "LixHubLogoToggle"
-		toggleGui.ResetOnSpawn = false
-		toggleGui.DisplayOrder = 10000030
-		pcall(function() toggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling end)
+	(function()
+		compactGui = Instance.new("ScreenGui")
+		compactGui.Name = "LixHubCompactTopbar"
+		compactGui.ResetOnSpawn = false
+		compactGui.DisplayOrder = 10000030
+		pcall(function() compactGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling end)
 
 		local guiParent = macLib.Parent
 		if not guiParent then
 			pcall(function() guiParent = game:GetService("CoreGui") end)
 		end
-		toggleGui.Parent = guiParent
+		compactGui.Parent = guiParent
 
-		local logoBtn = Instance.new("ImageButton")
-		logoBtn.Name = "LogoBtn"
-		logoBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-		logoBtn.BackgroundTransparency = 0
-		logoBtn.BorderSizePixel = 0
-		logoBtn.Position = UDim2.new(0, 50, 0, 50)
-		logoBtn.Size = UDim2.new(0, 50, 0, 50)
-		logoBtn.Image = "rbxassetid://139436994731049"
-		logoBtn.ScaleType = Enum.ScaleType.Fit
-		logoBtn.ImageTransparency = 0
-		logoBtn.ZIndex = 10000
-		logoBtn.AutoButtonColor = true
-		logoBtn.Parent = toggleGui
+		compactBar = Instance.new("CanvasGroup")
+		compactBar.Name = "CompactTopbar"
+		compactBar.Active = true
+		compactBar.AnchorPoint = Vector2.new(0.5, 0)
+		compactBar.BackgroundColor3 = theme.base
+		compactBar.BackgroundTransparency = acrylicBlur and theme.baseTrans or 0
+		compactBar.BorderSizePixel = 0
+		compactBar.Position = UDim2.new(0.5, 0, 0, 14)
+		compactBar.Size = UDim2.fromOffset(440, 44)
+		compactBar.Visible = false
+		compactBar.ZIndex = 10000
+		compactBar.Parent = compactGui
 
-		local logoBtnCorner = Instance.new("UICorner")
-		logoBtnCorner.CornerRadius = UDim.new(1, 0)
-		logoBtnCorner.Parent = logoBtn
+		compactScale = Instance.new("UIScale")
+		compactScale.Name = "CompactScale"
+		compactScale.Scale = 1
+		compactScale.Parent = compactBar
+		_compactBlurCleanup = BindAcrylicTarget(compactBar)
 
-		local logoBtnShadow = Instance.new("ImageLabel")
-		logoBtnShadow.BackgroundTransparency = 1
-		logoBtnShadow.Position = UDim2.new(0, -15, 0, -15)
-		logoBtnShadow.Size = UDim2.new(1, 30, 1, 30)
-		logoBtnShadow.ZIndex = logoBtn.ZIndex - 1
-		logoBtnShadow.Image = "rbxassetid://6014261993"
-		logoBtnShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-		logoBtnShadow.ImageTransparency = 0.5
-		logoBtnShadow.ScaleType = Enum.ScaleType.Slice
-		logoBtnShadow.SliceCenter = Rect.new(49, 49, 450, 450)
-		logoBtnShadow.Parent = logoBtn
-
-		local btnDragging = false
-		local btnDragInput
-		local btnDragStart
-		local btnStartPos
-		local btnClickStartPos
-		local btnClickStartTime = 0
-
-		logoBtn.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				btnDragging = true
-				btnDragStart = input.Position
-				btnStartPos = logoBtn.Position
-				btnClickStartPos = logoBtn.Position
-				btnClickStartTime = tick()
-				input.Changed:Connect(function()
-					if input.UserInputState == Enum.UserInputState.End then
-						btnDragging = false
-					end
-				end)
-			end
-		end)
-
-		UserInputService.InputChanged:Connect(function(input)
-			if not btnDragging then return end
-			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-				logoBtn.Position = UDim2.new(
-					btnStartPos.X.Scale,
-					btnStartPos.X.Offset + (input.Position.X - btnDragStart.X),
-					btnStartPos.Y.Scale,
-					btnStartPos.Y.Offset + (input.Position.Y - btnDragStart.Y)
-				)
-			end
-		end)
-
-		logoBtn.MouseButton1Up:Connect(function()
-			if btnClickStartPos
-				and (tick() - btnClickStartTime) < 0.2
-				and math.sqrt(
-					(logoBtn.Position.X.Offset - btnClickStartPos.X.Offset) ^ 2
-					+ (logoBtn.Position.Y.Offset - btnClickStartPos.Y.Offset) ^ 2
-				) < 5 then
-				ToggleMenu()
-			end
-			btnClickStartPos = nil
-		end)
-
-		logoBtn.MouseEnter:Connect(function()
-			TweenService:Create(logoBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-				Size = UDim2.new(0, 55, 0, 55),
-				BackgroundColor3 = Color3.fromRGB(55, 55, 55),
-			}):Play()
-		end)
-		logoBtn.MouseLeave:Connect(function()
-			TweenService:Create(logoBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-				Size = UDim2.new(0, 50, 0, 50),
-				BackgroundColor3 = Color3.fromRGB(45, 45, 45),
-			}):Play()
-		end)
-
-		local _origUnload = WindowFunctions.Unload
-		function WindowFunctions:Unload()
-			pcall(function() toggleGui:Destroy() end)
-			_origUnload(self)
+		if type(_loadedCompactPosition) == "table" then
+			compactBar.Position = UDim2.new(
+				tonumber(_loadedCompactPosition.xScale) or 0.5,
+				tonumber(_loadedCompactPosition.xOffset) or 0,
+				tonumber(_loadedCompactPosition.yScale) or 0,
+				tonumber(_loadedCompactPosition.yOffset) or 14
+			)
 		end
 
-		WindowFunctions.LogoToggleGui = toggleGui
+		local compactCorner = Instance.new("UICorner")
+		compactCorner.CornerRadius = UDim.new(0, 11)
+		compactCorner.Parent = compactBar
+
+		local compactShadow = Instance.new("ImageLabel")
+		compactShadow.Name = "Shadow"
+		compactShadow.BackgroundTransparency = 1
+		compactShadow.Position = UDim2.new(0, -14, 0, -14)
+		compactShadow.Size = UDim2.new(1, 28, 1, 28)
+		compactShadow.Image = "rbxassetid://6014261993"
+		compactShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+		compactShadow.ImageTransparency = 0.38
+		compactShadow.ScaleType = Enum.ScaleType.Slice
+		compactShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+		compactShadow.ZIndex = compactBar.ZIndex - 1
+		compactShadow.Parent = compactBar
+
+		local compactStroke = Instance.new("UIStroke")
+		compactStroke.Name = "CompactStroke"
+		compactStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		compactStroke.Color = theme.stroke
+		compactStroke.Transparency = math.min((theme.strokeTrans or 0.8) + 0.08, 0.92)
+		compactStroke.Parent = compactBar
+
+		local function makeCompactLabel(name, text, textSize, weight)
+			local label = Instance.new("TextLabel")
+			label.Name = name
+			label.BackgroundTransparency = 1
+			label.FontFace = Font.new(assets.interFont, weight or Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+			label.Text = text
+			label.TextColor3 = Color3.fromRGB(235, 235, 240)
+			label.TextSize = textSize or 13
+			label.TextTruncate = Enum.TextTruncate.AtEnd
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.ZIndex = compactBar.ZIndex + 2
+			label.Parent = compactBar
+			return label
+		end
+
+		local fpsDot = Instance.new("Frame")
+		fpsDot.Name = "FPSDot"
+		fpsDot.AnchorPoint = Vector2.new(0, 0.5)
+		fpsDot.BackgroundColor3 = Color3.fromRGB(75, 220, 120)
+		fpsDot.BorderSizePixel = 0
+		fpsDot.Position = UDim2.new(0, 10, 0.5, 0)
+		fpsDot.Size = UDim2.fromOffset(9, 9)
+		fpsDot.ZIndex = compactBar.ZIndex + 2
+		fpsDot.Parent = compactBar
+		local fpsDotCorner = Instance.new("UICorner")
+		fpsDotCorner.CornerRadius = UDim.new(1, 0)
+		fpsDotCorner.Parent = fpsDot
+
+		local fpsLabel = makeCompactLabel("FPS", "-- FPS", 12, Enum.FontWeight.SemiBold)
+		fpsLabel.Position = UDim2.new(0, 24, 0, 0)
+		fpsLabel.Size = UDim2.fromOffset(48, 44)
+
+		local dividerOne = Instance.new("Frame")
+		dividerOne.Name = "Divider"
+		dividerOne.AnchorPoint = Vector2.new(0, 0.5)
+		dividerOne.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		dividerOne.BackgroundTransparency = 0.86
+		dividerOne.BorderSizePixel = 0
+		dividerOne.Position = UDim2.new(0, 76, 0.5, 0)
+		dividerOne.Size = UDim2.fromOffset(1, 20)
+		dividerOne.ZIndex = compactBar.ZIndex + 2
+		dividerOne.Parent = compactBar
+
+		local avatar = Instance.new("ImageLabel")
+		avatar.Name = "Avatar"
+		avatar.AnchorPoint = Vector2.new(0, 0.5)
+		avatar.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+		avatar.BorderSizePixel = 0
+		avatar.Position = UDim2.new(0, 86, 0.5, 0)
+		avatar.Size = UDim2.fromOffset(26, 26)
+		avatar.ZIndex = compactBar.ZIndex + 2
+		avatar.Parent = compactBar
+		local avatarCorner = Instance.new("UICorner")
+		avatarCorner.CornerRadius = UDim.new(1, 0)
+		avatarCorner.Parent = avatar
+
+		local userLabel = makeCompactLabel("Username", "@" .. tostring(LocalPlayer.Name), 12, Enum.FontWeight.Medium)
+		local dividerTwo = dividerOne:Clone()
+		dividerTwo.Name = "Divider2"
+		dividerTwo.Parent = compactBar
+		local gameLabel = makeCompactLabel("Game", tostring(Settings.Title or "LixHub"), 12, Enum.FontWeight.SemiBold)
+
+		local eyeButton = Instance.new("ImageButton")
+		eyeButton.Name = "Restore"
+		eyeButton.AnchorPoint = Vector2.new(1, 0.5)
+		eyeButton.AutoButtonColor = false
+		eyeButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		eyeButton.BackgroundTransparency = 0.94
+		eyeButton.BorderSizePixel = 0
+		eyeButton.Position = UDim2.new(1, -7, 0.5, 0)
+		eyeButton.Size = UDim2.fromOffset(32, 30)
+		eyeButton.ImageColor3 = Color3.fromRGB(225, 225, 232)
+		eyeButton.ZIndex = compactBar.ZIndex + 3
+		eyeButton.Parent = compactBar
+		setTabIcon(eyeButton, "eye")
+		local eyeCorner = Instance.new("UICorner")
+		eyeCorner.CornerRadius = UDim.new(0, 8)
+		eyeCorner.Parent = eyeButton
+
+		updateCompactLayout = function()
+			if not compactBar or not compactBar.Parent then return end
+			local viewport = getViewportSize()
+			local width = math.floor(math.min(520, math.max(220, viewport.X - 24)))
+			compactBar.Size = UDim2.fromOffset(width, 44)
+			local userWidth = math.floor(math.clamp(width * 0.23, 56, 100))
+			userLabel.Position = UDim2.new(0, 119, 0, 0)
+			userLabel.Size = UDim2.fromOffset(userWidth, 44)
+			local dividerX = 125 + userWidth
+			dividerTwo.Position = UDim2.new(0, dividerX, 0.5, 0)
+			gameLabel.Position = UDim2.new(0, dividerX + 10, 0, 0)
+			gameLabel.Size = UDim2.new(1, -(dividerX + 54), 0, 44)
+		end
+
+		clampCompactBar = function()
+			if not compactBar or not compactBar.Parent then return end
+			local viewport = getViewportSize()
+			local size = compactBar.AbsoluteSize
+			local currentCenterX = compactBar.AbsolutePosition.X + size.X / 2
+			local currentTop = compactBar.AbsolutePosition.Y
+			if currentCenterX == 0 then currentCenterX = viewport.X / 2 end
+			local margin = 8
+			local minX, maxX = size.X / 2 + margin, viewport.X - size.X / 2 - margin
+			local x = minX > maxX and viewport.X / 2 or math.clamp(currentCenterX, minX, maxX)
+			local y = math.clamp(currentTop, margin, math.max(margin, viewport.Y - size.Y - margin))
+			compactBar.Position = UDim2.fromOffset(x, y)
+		end
+
+		updateCompactLayout()
+		task.defer(clampCompactBar)
+
+		task.spawn(function()
+			local ok, image = pcall(
+				Players.GetUserThumbnailAsync,
+				Players,
+				LocalPlayer.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size48x48
+			)
+			if ok and avatar.Parent then avatar.Image = image end
+		end)
+
+		local frames, elapsed = 0, 0
+		_compactFPSConnection = RunService.RenderStepped:Connect(function(deltaTime)
+			frames = frames + 1
+			elapsed = elapsed + deltaTime
+			if elapsed < 0.5 then return end
+			local fps = math.floor(frames / math.max(elapsed, 0.001) + 0.5)
+			fpsLabel.Text = tostring(fps) .. " FPS"
+			fpsDot.BackgroundColor3 = fps >= 50 and Color3.fromRGB(75, 220, 120)
+				or (fps >= 30 and Color3.fromRGB(245, 190, 70) or Color3.fromRGB(245, 80, 90))
+			frames, elapsed = 0, 0
+		end)
+
+		local dragging = false
+		local dragStart
+		local startPosition
+		compactBar.InputBegan:Connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+			dragging = true
+			dragStart = input.Position
+			startPosition = compactBar.Position
+			input.Changed:Connect(function()
+				if input.UserInputState ~= Enum.UserInputState.End then return end
+				dragging = false
+				task.defer(function()
+					clampCompactBar()
+					SaveGlobalUISettings()
+				end)
+			end)
+		end)
+
+		_compactInputConnection = UserInputService.InputChanged:Connect(function(input)
+			if not dragging then return end
+			if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+			local delta = input.Position - dragStart
+			compactBar.Position = UDim2.new(
+				startPosition.X.Scale,
+				startPosition.X.Offset + delta.X,
+				startPosition.Y.Scale,
+				startPosition.Y.Offset + delta.Y
+			)
+		end)
+
+		eyeButton.MouseButton1Click:Connect(function()
+			WindowFunctions:SetState(true)
+		end)
+		eyeButton.MouseEnter:Connect(function()
+			TweenService:Create(eyeButton, TweenInfo.new(0.15), { BackgroundTransparency = 0.86 }):Play()
+		end)
+		eyeButton.MouseLeave:Connect(function()
+			TweenService:Create(eyeButton, TweenInfo.new(0.15), { BackgroundTransparency = 0.94 }):Play()
+		end)
+
+		WindowFunctions.CompactTopbarGui = compactGui
+		WindowFunctions.LogoToggleGui = compactGui
+	end)()
+
+	local camera = Workspace and Workspace.CurrentCamera
+	if camera then
+		_viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			applyAutomaticScale()
+			task.defer(clampWindowToViewport)
+			if updateCompactLayout then updateCompactLayout() end
+			if clampCompactBar then task.defer(clampCompactBar) end
+		end)
 	end
 
 	return WindowFunctions
