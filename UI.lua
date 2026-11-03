@@ -5949,8 +5949,6 @@ end]]
 
 	do
 		local currentThemeName = (type(Settings.Theme) == "string") and Settings.Theme or "Dark"
-		local autoHideEnabled = false
-		local autoHideConn = nil
 
 		local tg = WindowFunctions:TabGroup()
 		local settingsTab = tg:Tab({ Name = "UI Settings", Icon = "settings" })
@@ -6123,33 +6121,18 @@ end]]
 				SaveGlobalUISettings()
 			end,
 		}, "__maclib_uiscale")
-		local autoHideEnterConn = nil
-		local function applyAutoHideConnections(state)
-			if autoHideConn then autoHideConn:Disconnect(); autoHideConn = nil end
-			if autoHideEnterConn then autoHideEnterConn:Disconnect(); autoHideEnterConn = nil end
-			if state then
-				autoHideConn = base.MouseLeave:Connect(function()
-					if autoHideEnabled then WindowFunctions:SetState(false) end
-				end)
-				autoHideEnterConn = base.MouseEnter:Connect(function()
-					if autoHideEnabled then WindowFunctions:SetState(true) end
-				end)
-			end
-		end
 		displaySection:Toggle({
 			Name = "Auto-hide",
 			Default = false,
 			Callback = function(state)
-				autoHideEnabled = state
-				if _isLoadingUISettings then
-					-- Defer wiring the connections until after all settings have
-					-- finished loading, so a MouseLeave fired during startup does
-					-- not immediately hide the UI.
+				if state then
 					task.defer(function()
-						applyAutoHideConnections(autoHideEnabled)
+						if _isLoadingUISettings then task.wait(0.25) end
+						local option = MacLib.Options["__maclib_autohide"]
+						if option and option.State then
+							WindowFunctions:SetState(false)
+						end
 					end)
-				else
-					applyAutoHideConnections(state)
 				end
 				SaveGlobalUISettings()
 			end,
