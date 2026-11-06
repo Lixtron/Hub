@@ -307,7 +307,26 @@ local function GetGui()
 end
 
 local function Tween(instance, tweeninfo, propertytable)
-	return TweenService:Create(instance, tweeninfo, propertytable)
+	local ok, tween = pcall(TweenService.Create, TweenService, instance, tweeninfo, propertytable)
+	if ok and tween then return tween end
+
+	local completed = {}
+	function completed:Wait()
+		return Enum.PlaybackState.Completed
+	end
+	function completed:Connect(callback)
+		if type(callback) == "function" then task.defer(callback, Enum.PlaybackState.Completed) end
+		return { Disconnect = function() end }
+	end
+
+	local fallback = { Completed = completed }
+	function fallback:Play()
+		for property, value in pairs(propertytable or {}) do
+			pcall(function() instance[property] = value end)
+		end
+	end
+	function fallback:Cancel() end
+	return fallback
 end
 
 function MacLib:Window(Settings)
@@ -1121,7 +1140,12 @@ end]]
 
 	UserInputService.InputChanged:Connect(function(input)
 		if resizingContent and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local deltaX = UserInputService:GetMouseLocation().X - initialMouseX
+			if type(initialMouseX) ~= "number" or type(initialSidebarWidth) ~= "number" then
+				resizingContent = false
+				return
+			end
+			local mouseLocation = UserInputService:GetMouseLocation()
+			local deltaX = mouseLocation.X - initialMouseX
 			local newSidebarWidth = initialSidebarWidth + deltaX
 
 			if math.abs(newSidebarWidth - defaultSidebarWidth) < snapRange then
@@ -1222,15 +1246,23 @@ end]]
 	local startPos
 
 	local function update(input)
+		if not input or not input.Position or not dragStart or not startPos then
+			dragging_ = false
+			return
+		end
 		local delta = input.Position - dragStart
 		base.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 
 	local function onDragStart(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			local ok, position, currentPosition = pcall(function()
+				return input.Position, base.Position
+			end)
+			if not ok or not position or not currentPosition then return end
+			dragStart = position
+			startPos = currentPosition
 			dragging_ = true
-			dragStart = input.Position
-			startPos = base.Position
 
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -7246,7 +7278,7 @@ end]]
 		return true
 	end
 
-	function MacLib:LoadConfig(Path)
+	function MacLib:LoadConfig(Path, checkpoint)
 		if isStudio or not (isfile and readfile) then return "Config system unavailable." end
 
 		if (not Path) then
@@ -7261,9 +7293,15 @@ end]]
 
 		for _, option in next, decoded.objects do
 			if ClassParser[option.type] then
-				task.spawn(function()
-					ClassParser[option.type].Load(option.flag, option)
-				end)
+				if type(checkpoint) == "function" then
+					checkpoint()
+					local ok, err = pcall(ClassParser[option.type].Load, option.flag, option)
+					if not ok then warn("MacLib config:", option.flag, err) end
+				else
+					task.spawn(function()
+						ClassParser[option.type].Load(option.flag, option)
+					end)
+				end
 			end
 		end
 
