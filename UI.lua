@@ -133,6 +133,19 @@ local Themes = {
 		strokeTrans  = 0.50,
 		gradientStart= 0.22,
 	},
+	["Halloween"] = {
+		base         = Color3.fromRGB(18, 13, 10),
+		baseTrans    = 0.06,
+		acrylicTint  = "Bright orange",
+		acrylicTrans = 0.96,
+		stroke       = Color3.fromRGB(255, 132, 47),
+		searchBg     = Color3.fromRGB(33, 24, 17),
+		strokeTrans  = 0.52,
+		gradientStart= 0.30,
+		panel        = Color3.fromRGB(37, 28, 22),
+		text         = Color3.fromRGB(255, 242, 226),
+		accent       = Color3.fromRGB(255, 132, 47),
+	},
 	["Arctic"] = {
 		base         = Color3.fromRGB(7,   14,  30),
 		baseTrans    = 0.04,
@@ -157,6 +170,11 @@ local function resolveTheme(Settings)
 			searchBg     = t.searchBg     or Themes["Dark"].searchBg,
 			strokeTrans  = t.strokeTrans  or Themes["Dark"].strokeTrans,
 			gradientStart= t.gradientStart or Themes["Dark"].gradientStart,
+			panel        = t.panel,
+			text         = t.text,
+			accent       = t.accent,
+			wallpaper    = t.wallpaper,
+			wallpaperDim = t.wallpaperDim,
 		}
 	end
 	local name = (type(Settings.Theme) == "string") and Settings.Theme or "Dark"
@@ -329,6 +347,377 @@ local function Tween(instance, tweeninfo, propertytable)
 	return fallback
 end
 
+local ThemeEditor = {
+	presets = {"Dark", "Void", "Ocean", "Ember", "Forest", "Rose", "Gold", "Arctic", "Halloween"},
+	colors = {
+		{ key = "base", label = "Background" },
+		{ key = "panel", label = "Panels" },
+		{ key = "text", label = "Text" },
+		{ key = "accent", label = "Accent" },
+	},
+	white = Color3.fromRGB(255, 255, 255),
+	neutralControl = Color3.fromRGB(87, 86, 86),
+	defaultDim = 0.70,
+}
+
+function ThemeEditor.cleanName(value)
+	if type(value) ~= "string" then return nil end
+	local name = value:match("^%s*(.-)%s*$")
+	if #name == 0 or #name > 24 or not name:match("^[%w _%-]+$") then return nil end
+	for _, preset in ipairs(ThemeEditor.presets) do
+		if preset:lower() == name:lower() then return nil end
+	end
+	return name
+end
+
+function ThemeEditor.cleanWallpaper(value)
+	if type(value) ~= "string" or #value > 2048 then return nil end
+	local url = value:match("^%s*(.-)%s*$")
+	local id = url:match("^rbxassetid://(%d+)$") or url:match("^(%d+)$")
+	if id then return "rbxassetid://" .. id end
+	id = url:match("^https://www%.roblox%.com/asset/%?id=(%d+)$")
+	if id then return "rbxassetid://" .. id end
+	if url:match("^https://[^/%?#%s]+/[^%s]+$") then return url end
+end
+
+function ThemeEditor.readThemes(raw)
+	local themes = {}
+	if type(raw) ~= "table" then return themes end
+	local names = {}
+	for name in pairs(raw) do
+		if ThemeEditor.cleanName(name) == name then names[#names + 1] = name end
+	end
+	table.sort(names)
+	local seen = {}
+	for _, name in ipairs(names) do
+		if #seen == 32 then break end
+		local entry = raw[name]
+		if type(entry) ~= "table" or type(entry.colors) ~= "table" or table.find(seen, name:lower()) then continue end
+		local theme = {}
+		for _, field in ipairs(ThemeEditor.colors) do
+			local hex = entry.colors[field.key]
+			if type(hex) == "string" and hex:match("^%x%x%x%x%x%x$") then
+				theme[field.key] = Color3.fromHex(hex)
+			end
+		end
+		if theme.base and theme.panel and theme.text and theme.accent then
+			theme.wallpaper = ThemeEditor.cleanWallpaper(entry.wallpaper)
+			local dim = entry.wallpaperDim
+			theme.wallpaperDim = type(dim) == "number" and math.clamp(dim, 0, 1) or ThemeEditor.defaultDim
+			themes[name] = ThemeEditor.preview(theme)
+			seen[#seen + 1] = name:lower()
+		end
+	end
+	return themes
+end
+
+function ThemeEditor.writeThemes(themes)
+	local data = {}
+	for name, theme in pairs(themes) do
+		local colors = {}
+		for _, field in ipairs(ThemeEditor.colors) do
+			colors[field.key] = theme[field.key]:ToHex()
+		end
+		data[name] = { colors = colors, wallpaper = theme.wallpaper, wallpaperDim = theme.wallpaperDim }
+	end
+	return data
+end
+
+function ThemeEditor.makeDraft(theme)
+	local draft = table.clone(theme)
+	draft.panel = theme.panel or theme.base:Lerp(ThemeEditor.white, 0.045)
+	draft.text = theme.text or ThemeEditor.white
+	draft.accent = theme.accent or theme.stroke
+	draft.wallpaperDim = theme.wallpaperDim or ThemeEditor.defaultDim
+	return draft
+end
+
+function ThemeEditor.preview(draft)
+	local theme = table.clone(draft)
+	theme.stroke = theme.accent
+	theme.searchBg = theme.panel
+	theme.baseTrans = Themes.Dark.baseTrans
+	theme.acrylicTint = Themes.Dark.acrylicTint
+	theme.acrylicTrans = Themes.Dark.acrylicTrans
+	theme.strokeTrans = Themes.Halloween.strokeTrans
+	theme.gradientStart = Themes.Halloween.gradientStart
+	return theme
+end
+
+function ThemeEditor.loadWallpaper(source)
+	if source:match("^rbxassetid://") then return source end
+	local getAsset = getcustomasset or getsynasset
+	if type(getAsset) ~= "function" or type(writefile) ~= "function" or type(makefolder) ~= "function"
+		or type(isfolder) ~= "function" or type(isfile) ~= "function" then
+		return nil, "Image links are unavailable. Try a Roblox asset ID."
+	end
+
+	local first, second = 5381, 0
+	for i = 1, #source do
+		local byte = source:byte(i)
+		first = (first * 33 + byte) % 4294967296
+		second = (second * 131 + byte) % 4294967296
+	end
+	local folder = "LixHub/ui_wallpapers"
+	local path = string.format("%s/%08x%08x", folder, first, second)
+	for _, extension in ipairs({".png", ".jpg"}) do
+		if isfile(path .. extension) then
+			local ok, asset = pcall(getAsset, path .. extension)
+			if ok and type(asset) == "string" and asset ~= "" then return asset end
+		end
+	end
+
+	local body = game:HttpGet(source)
+	if type(body) ~= "string" or #body > 6 * 1024 * 1024 then
+		return nil, "Use a PNG or JPG under 6 MB."
+	end
+	local extension
+	if body:sub(1, 8) == "\137PNG\r\n\26\n" then
+		extension = ".png"
+	elseif body:sub(1, 3) == "\255\216\255" then
+		extension = ".jpg"
+	else
+		return nil, "Use a direct link to a PNG or JPG."
+	end
+	if not isfolder("LixHub") then makefolder("LixHub") end
+	if not isfolder(folder) then makefolder(folder) end
+	writefile(path .. extension, body)
+	return getAsset(path .. extension)
+end
+
+function ThemeEditor.applyWallpaper(state, source, dim, report)
+	local image = state.wallpaper
+	image.ImageTransparency = dim or ThemeEditor.defaultDim
+	if source == state.wallpaperSource and (not report or image.Image ~= "") then
+		if report then report() end
+		return
+	end
+	state.wallpaperSource = source
+	state.wallpaperRequest += 1
+	local request = state.wallpaperRequest
+	image.Image = ""
+	image.Visible = false
+	if not source then return end
+
+	local finished = false
+	local function finish(asset, message)
+		if finished or state.wallpaperRequest ~= request or not image.Parent then return end
+		finished = true
+		if asset then
+			image.Image = asset
+			image.Visible = true
+		end
+		if report then report(not asset and (message or "Could not load the wallpaper.") or nil) end
+	end
+	task.delay(12, function() finish(nil) end)
+	task.spawn(function()
+		local ok, asset, message = pcall(ThemeEditor.loadWallpaper, source)
+		if not ok or type(asset) ~= "string" or asset == "" then
+			finish(nil, ok and message or nil)
+			return
+		end
+		if finished or request ~= state.wallpaperRequest or not image.Parent then return end
+		local candidate = Instance.new("ImageLabel")
+		candidate.Image = asset
+		local loaded = false
+		local preloaded = pcall(ContentProvider.PreloadAsync, ContentProvider, {candidate}, function(_, status)
+			loaded = status == Enum.AssetFetchStatus.Success
+		end)
+		candidate:Destroy()
+		finish(preloaded and loaded and asset or nil)
+	end)
+end
+
+function ThemeEditor.style(state, object, kind)
+	local theme = state.theme
+	if kind == "panel" then
+		object.BackgroundColor3 = theme.panel or ThemeEditor.white
+		object.BackgroundTransparency = theme.panel and 0.22 or 0.98
+	elseif kind == "toggle" then
+		object.ImageColor3 = object:GetAttribute("MacLibEnabled") and theme.accent or ThemeEditor.neutralControl
+	elseif kind == "slider" then
+		object.BackgroundColor3 = theme.accent or ThemeEditor.neutralControl
+		object.Visible = theme.accent ~= nil
+	else
+		object.TextColor3 = (object.Name == "Checkmark" and theme.accent) or theme.text or ThemeEditor.white
+	end
+end
+
+function ThemeEditor.bind(state, object, kind)
+	state.styles[object] = kind
+	ThemeEditor.style(state, object, kind)
+end
+
+function ThemeEditor.trackText(state, object)
+	if state.styles[object] then return end
+	if (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox"))
+		and object.TextColor3 == ThemeEditor.white then
+		ThemeEditor.bind(state, object, "text")
+	end
+end
+
+function ThemeEditor.apply(state, theme, report)
+	state.theme = theme
+	for object, kind in pairs(state.styles) do
+		if object.Parent then ThemeEditor.style(state, object, kind) end
+	end
+	if theme.text or theme.accent then
+		for _, object in ipairs(state.base:GetDescendants()) do
+			ThemeEditor.trackText(state, object)
+		end
+	end
+	ThemeEditor.applyWallpaper(state, theme.wallpaper, theme.wallpaperDim, report)
+end
+
+function ThemeEditor.create(base, theme)
+	local wallpaper = Instance.new("ImageLabel")
+	wallpaper.Name = "Wallpaper"
+	wallpaper.Size = UDim2.fromScale(1, 1)
+	wallpaper.ScaleType = Enum.ScaleType.Crop
+	wallpaper.BackgroundTransparency = 1
+	wallpaper.ZIndex = 0
+	wallpaper.Visible = false
+	wallpaper.Parent = base
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = wallpaper
+
+	local state = {
+		base = base,
+		theme = theme,
+		wallpaper = wallpaper,
+		wallpaperRequest = 0,
+		custom = {},
+		styles = setmetatable({}, {__mode = "k"}),
+	}
+	base.DescendantAdded:Connect(function(object)
+		if state.theme.text or state.theme.accent then ThemeEditor.trackText(state, object) end
+	end)
+	return state
+end
+
+function ThemeEditor.refreshOptions(state)
+	local dropdown = state.dropdown
+	if not dropdown then return end
+	local names = {}
+	for name in pairs(state.custom) do names[#names + 1] = name end
+	table.sort(names)
+	local options = table.clone(ThemeEditor.presets)
+	for _, name in ipairs(names) do options[#options + 1] = name end
+	dropdown:ClearOptions()
+	dropdown:InsertOptions(options)
+end
+
+function ThemeEditor.build(section, state, window, save)
+	local function notify(message)
+		window:Notify({Title = "Themes", Description = message, Duration = 4})
+	end
+	local name = section:Input({Name = "Theme Name", Placeholder = "Name", CharacterLimit = 24})
+	local pickers = {}
+	local function preview()
+		local theme = ThemeEditor.preview(state.draft)
+		theme.wallpaper = state.pendingWallpaper or theme.wallpaper
+		window:SetTheme(theme)
+	end
+	for _, field in ipairs(ThemeEditor.colors) do
+		local key = field.key
+		pickers[key] = section:Colorpicker({
+			Name = field.label,
+			Default = state.draft[key],
+			Callback = function(color)
+				state.draft[key] = color
+				preview()
+			end,
+		})
+	end
+	local wallpaper = section:Input({Name = "Wallpaper", Placeholder = "Image URL or asset ID", CharacterLimit = 2048})
+	local dim = section:Slider({
+		Name = "Wallpaper Dim",
+		Default = state.draft.wallpaperDim,
+		Minimum = 0,
+		Maximum = 1,
+		Precision = 2,
+		Callback = function(value)
+			state.draft.wallpaperDim = value
+			state.wallpaper.ImageTransparency = value
+		end,
+	})
+	section:Button({Name = "Apply Wallpaper", Callback = function()
+		local source = ThemeEditor.cleanWallpaper(wallpaper:GetInput())
+		if not source then
+			notify("Enter a direct image link or a Roblox asset ID.")
+			return
+		end
+		state.pendingWallpaper = source
+		local theme = ThemeEditor.preview(state.draft)
+		theme.wallpaper = source
+		window:SetTheme(theme, function(message)
+			if state.pendingWallpaper ~= source then return end
+			state.pendingWallpaper = nil
+			if message then
+				preview()
+				notify(message)
+			else
+				state.draft.wallpaper = source
+			end
+		end)
+	end})
+	section:Button({Name = "Clear Wallpaper", Callback = function()
+		wallpaper:UpdateText("")
+		state.pendingWallpaper = nil
+		state.draft.wallpaper = nil
+		preview()
+	end})
+	section:Button({Name = "Save Theme", Callback = function()
+		if state.pendingWallpaper then
+			notify("Wait for the wallpaper to load.")
+			return
+		end
+		local selected = ThemeEditor.cleanName(name:GetInput())
+		if not selected then
+			notify("Use a new name with letters, numbers, spaces, hyphens or underscores.")
+			return
+		end
+		local count = 0
+		for existing in pairs(state.custom) do
+			if existing:lower() == selected:lower() then selected = existing end
+			count += 1
+		end
+		if count >= 32 and not state.custom[selected] then
+			notify("Delete a theme to make room for another.")
+			return
+		end
+		state.custom[selected] = ThemeEditor.preview(state.draft)
+		state.updatingDropdown = true
+		ThemeEditor.refreshOptions(state)
+		state.dropdown:UpdateSelection(selected)
+		state.updatingDropdown = false
+		if not save() then notify("Could not save your theme to this device.") end
+	end})
+	section:Button({Name = "Delete Theme", Callback = function()
+		if not state.custom[state.selected] then
+			notify("Choose a saved theme first.")
+			return
+		end
+		state.custom[state.selected] = nil
+		state.updatingDropdown = true
+		ThemeEditor.refreshOptions(state)
+		state.dropdown:UpdateSelection("Dark")
+		state.updatingDropdown = false
+		if not save() then notify("Could not update saved themes on this device.") end
+	end})
+	state.refreshEditor = function()
+		name:UpdateText(state.custom[state.selected] and state.selected or "")
+		wallpaper:UpdateText(state.draft.wallpaper or "")
+		dim:UpdateValue(state.draft.wallpaperDim)
+		for key, picker in pairs(pickers) do
+			picker:SetColor(state.draft[key], true)
+		end
+	end
+	state.refreshEditor()
+end
+
 function MacLib:Window(Settings)
 	local WindowFunctions = {Settings = Settings}
 	local disableAutoExecute = Settings.DisableAutoExecute == true or Settings.disableAutoExecute == true
@@ -459,8 +848,6 @@ end]]
 			end
 		end)
 	end
-
-	local _acrylicCustomTrans = nil
 
 	local theme = resolveTheme(Settings)
 
@@ -600,6 +987,7 @@ end]]
 	})
 	baseGradient.Parent = baseGradientFrame
 
+	local appearance = ThemeEditor.create(base, theme)
 	local sidebar = Instance.new("Frame")
 	sidebar.Name = "Sidebar"
 	sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -1884,7 +2272,7 @@ end]]
 		end
 		DepthOfField.Enabled = true
 		local properties = {
-			Transparency = (_acrylicCustomTrans ~= nil) and _acrylicCustomTrans or theme.acrylicTrans;
+			Transparency = (appearance.acrylicTransparency ~= nil) and appearance.acrylicTransparency or theme.acrylicTrans;
 			BrickColor = BrickColor.new(theme.acrylicTint);
 		}
 		local zIndex = 1 - 0.05*frame.ZIndex
@@ -1975,7 +2363,7 @@ end]]
 			)
 
 			if fetchProps then
-				local transparency = (_acrylicCustomTrans ~= nil) and _acrylicCustomTrans or theme.acrylicTrans
+				local transparency = (appearance.acrylicTransparency ~= nil) and appearance.acrylicTransparency or theme.acrylicTrans
 				for _, pt in pairs(targetParts) do
 					pt.Parent = liveCamera
 					pt.Transparency = transparency
@@ -1996,8 +2384,8 @@ end]]
 		end
 	end
 
-	function WindowFunctions:SetTheme(newTheme)
-		local t = resolveTheme({ Theme = newTheme })
+	function WindowFunctions:SetTheme(newTheme, wallpaperReport)
+		local t = resolveTheme({ Theme = appearance.custom[newTheme] or newTheme })
 		theme = t
 
 		base.BackgroundColor3       = t.base
@@ -2020,6 +2408,7 @@ end]]
 		globalSettingsUIStroke.Color     = t.stroke
 
 		searchResults.BackgroundColor3 = t.searchBg
+		ThemeEditor.apply(appearance, t, wallpaperReport)
 
 		if compactBar then
 			compactBar.BackgroundColor3 = t.base
@@ -2484,6 +2873,7 @@ end]]
 				sectionOuter.Position = UDim2.fromScale(0, 6.78e-08)
 				sectionOuter.Size = UDim2.fromScale(1, 0)
 				sectionOuter.ClipsDescendants = true
+				ThemeEditor.bind(appearance, sectionOuter, "panel")
 
 				if Settings.Side == "Left" then
 					sectionOuter.Parent = left
@@ -2592,6 +2982,7 @@ end]]
 						else
 							sectionArrow.Rotation = rotation
 						end
+						if not collapsed and type(Settings.OnExpand) == "function" then Settings.OnExpand() end
 					end
 
 					sectionHeader.MouseEnter:Connect(function()
@@ -2840,12 +3231,15 @@ end]]
 						}):Play()
 
 						ToggleFunctions.State = State
+						toggle1:SetAttribute("MacLibEnabled", State == true)
+						ThemeEditor.style(appearance, toggle1, "toggle")
 						if callback then
 							callback(togglebool)
 						end
 					end
 
 					NewState(togglebool)
+					ThemeEditor.bind(appearance, toggle1, "toggle")
 
 					local function Toggle()
 						togglebool = not togglebool
@@ -2979,6 +3373,12 @@ end]]
 					sliderBar.Position = UDim2.fromScale(0.219, 0.457)
 					sliderBar.Size = UDim2.fromOffset(123, 3)
 
+					local fill = Instance.new("Frame")
+					fill.Name = "SliderFill"
+					fill.BorderSizePixel = 0
+					fill.Parent = sliderBar
+					ThemeEditor.bind(appearance, fill, "slider")
+
 					local sliderHead = Instance.new("ImageButton")
 					sliderHead.Name = "SliderHead"
 					sliderHead.Image = assets.sliderhead
@@ -3045,6 +3445,7 @@ end]]
 
 						local pos = UDim2.new(posXScale, 0, 0.5, 0)
 						sliderHead.Position = pos
+						fill.Size = UDim2.fromScale(math.clamp(posXScale, 0, 1), 1)
 
 						finalValue = posXScale * (SliderFunctions.Settings.Maximum - SliderFunctions.Settings.Minimum) + SliderFunctions.Settings.Minimum
 
@@ -5357,7 +5758,7 @@ end]]
 						colorpicker.Visible = State
 					end
 
-					function ColorpickerFunctions:SetColor(color3)
+					function ColorpickerFunctions:SetColor(color3, ignoreCallback)
 						ColorpickerFunctions.Color = color3
 						colorC.BackgroundColor3 = color3
 
@@ -5379,7 +5780,7 @@ end]]
 						UpdateSlideFromValue(value)
 						UpdateRingFromHSV(hue, saturation)
 
-						if ColorpickerFunctions.Settings.Callback then
+						if not ignoreCallback and ColorpickerFunctions.Settings.Callback then
 							task.spawn(function()
 								ColorpickerFunctions.Settings.Callback(ColorpickerFunctions.Color, isAlpha and ColorpickerFunctions.Alpha)
 							end)
@@ -5883,7 +6284,7 @@ end]]
 		if isfolder and not isfolder("LixHub") then
 			if makefolder then pcall(makefolder, "LixHub") end
 		end
-		local data = { objects = {} }
+		local data = { objects = {}, customThemes = ThemeEditor.writeThemes(appearance.custom) }
 		if compactBar then
 			data.compactPosition = {
 				xScale = compactBar.Position.X.Scale,
@@ -5893,8 +6294,9 @@ end]]
 			}
 		end
 		local opt
-		opt = MacLib.Options["__maclib_theme"]
-		if opt then table.insert(data.objects, { type="Dropdown", flag="__maclib_theme", value=opt.Value }) end
+		if appearance.selected then
+			table.insert(data.objects, { type="Dropdown", flag="__maclib_theme", value=appearance.selected })
+		end
 		opt = MacLib.Options["__maclib_uiscale"]
 		if opt and _manualScale then
 			local scaleText = opt.Text or (type(opt.GetInput) == "function" and opt:GetInput()) or nil
@@ -5914,7 +6316,9 @@ end]]
 		opt = MacLib.Options["__maclib_autorejoin"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autorejoin", state=opt.State or false }) end
 		local ok, encoded = pcall(HttpService.JSONEncode, HttpService, data)
-		if ok then pcall(writefile, GLOBAL_UI_PATH, encoded) end
+		if not ok then return false end
+		local saved = pcall(writefile, GLOBAL_UI_PATH, encoded)
+		return saved
 	end
 
 	local function LoadGlobalUISettings()
@@ -5927,8 +6331,14 @@ end]]
 		if type(decoded.compactPosition) == "table" then
 			_loadedCompactPosition = decoded.compactPosition
 		end
+		appearance.custom = ThemeEditor.readThemes(decoded.customThemes)
+		if next(appearance.custom) then ThemeEditor.refreshOptions(appearance) end
 		local loaders = {
-			Dropdown = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateSelection(o.value) end end,
+			Dropdown = function(o)
+				local option = MacLib.Options[o.flag]
+				if not option or not o.value then return end
+				if o.flag ~= "__maclib_theme" or option:IsOption(o.value) then option:UpdateSelection(o.value) end
+			end,
 			Slider   = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateValue(tonumber(o.value) or o.value) end end,
 			Input    = function(o) if MacLib.Options[o.flag] and o.value then pcall(function() MacLib.Options[o.flag]:UpdateText(o.value) end) end end,
 			Toggle   = function(o) if MacLib.Options[o.flag] and o.state ~= nil then MacLib.Options[o.flag]:UpdateState(o.state) end end,
@@ -5956,10 +6366,6 @@ end]]
 		if loaded["__maclib_acrylicblur"] and blurOpt then
 			pcall(function() WindowFunctions:SetAcrylicBlurState(blurOpt.State) end)
 		end
-		local themeOpt = MacLib.Options["__maclib_theme"]
-		if loaded["__maclib_theme"] and themeOpt and themeOpt.Value then
-			pcall(function() WindowFunctions:SetTheme(themeOpt.Value) end)
-		end
 		local keybindOpt = MacLib.Options["__maclib_togglekey"]
 		if loaded["__maclib_togglekey"] and keybindOpt then
 			local bind = keybindOpt:GetBind()
@@ -5980,23 +6386,40 @@ end]]
 	local MenuKeybind = Settings.Keybind or Enum.KeyCode.RightControl
 
 	do
-		local currentThemeName = (type(Settings.Theme) == "string") and Settings.Theme or "Dark"
+		appearance.selected = type(Settings.Theme) == "string" and Themes[Settings.Theme] and Settings.Theme
+			or (type(Settings.Theme) ~= "table" and "Dark" or nil)
+		appearance.draft = ThemeEditor.makeDraft(theme)
 
 		local tg = WindowFunctions:TabGroup()
 		local settingsTab = tg:Tab({ Name = "UI Settings", Icon = "settings" })
 		settingsTabFunctions = settingsTab
 
 		local themeSection = settingsTab:Section({ Name = "Theme", Side = "Left" })
-		themeSection:Dropdown({
+		appearance.dropdown = themeSection:Dropdown({
 			Name = "Theme",
-			Options = { "Dark", "Void", "Ocean", "Ember", "Forest", "Rose", "Gold", "Arctic" },
-			CurrentOption = currentThemeName,
+			Options = table.clone(ThemeEditor.presets),
+			Default = table.find(ThemeEditor.presets, appearance.selected),
 			Callback = function(value)
-				currentThemeName = value
+				if not value or not (Themes[value] or appearance.custom[value]) then return end
+				appearance.selected = value
+				appearance.pendingWallpaper = nil
 				WindowFunctions:SetTheme(value)
-				SaveGlobalUISettings()
+				appearance.draft = ThemeEditor.makeDraft(theme)
+				if appearance.refreshEditor then appearance.refreshEditor() end
+				if not appearance.updatingDropdown then SaveGlobalUISettings() end
 			end,
 		}, "__maclib_theme")
+		appearance.dropdown.IgnoreConfig = true
+
+		do
+			local editor
+			editor = settingsTab:Section({Name = "Custom Theme", Side = "Right", Collapsible = true, Collapsed = true,
+				OnExpand = function()
+					if appearance.refreshEditor then return end
+					ThemeEditor.build(editor, appearance, WindowFunctions, SaveGlobalUISettings)
+				end,
+			})
+		end
 
 		local keySection = settingsTab:Section({ Name = "Key", Side = "Left" })
 
@@ -6893,17 +7316,17 @@ end]]
 
 	function WindowFunctions:SetAcrylicTransparency(value)
 		if value == nil then
-			_acrylicCustomTrans = nil
+			appearance.acrylicTransparency = nil
 		else
 			local n = tonumber(value)
 			if n then
-				_acrylicCustomTrans = math.clamp(n, 0, 1)
+				appearance.acrylicTransparency = math.clamp(n, 0, 1)
 			end
 		end
 	end
 
 	function WindowFunctions:GetAcrylicTransparency()
-		return _acrylicCustomTrans
+		return appearance.acrylicTransparency
 	end
 
 	local function _SetUserInfoState(State)
@@ -6950,6 +7373,7 @@ end]]
 	end
 
 	_isLoadingUISettings = true
+	ThemeEditor.apply(appearance, theme)
 	LoadGlobalUISettings()
 	_isLoadingUISettings = false
 	applyAutomaticScale()
@@ -7112,7 +7536,7 @@ end]]
 				}
 			end,
 			Load = function(Flag, data)
-				if MacLib.Options[Flag] and data.state then
+				if MacLib.Options[Flag] and type(data.state) == "boolean" then
 					MacLib.Options[Flag]:UpdateState(data.state)
 				end
 			end
@@ -7168,7 +7592,7 @@ end]]
 				}
 			end,
 			Load = function(Flag, data)
-				if MacLib.Options[Flag] and data.value then
+				if Flag ~= "__maclib_theme" and MacLib.Options[Flag] and data.value then
 					MacLib.Options[Flag]:UpdateSelection(data.value)
 				end
 			end
@@ -7262,11 +7686,25 @@ end]]
 			objects = {}
 		}
 
+		local preserved = {}
+		if type(self.PreserveConfigFlag) == "function" and isfile and readfile and isfile(fullPath) then
+			local ok, previous = pcall(function()
+				return HttpService:JSONDecode(readfile(fullPath))
+			end)
+			if ok and type(previous) == "table" and type(previous.objects) == "table" then
+				for _, option in pairs(previous.objects) do
+					if type(option) == "table" and type(option.flag) == "string" and self.PreserveConfigFlag(option.flag) then
+						preserved[option.flag] = option
+					end
+				end
+			end
+		end
+
 		for flag, option in next, MacLib.Options do
 			if not ClassParser[option.Class] then continue end
 			if option.IgnoreConfig then continue end
 
-			table.insert(data.objects, ClassParser[option.Class].Save(flag, option))
+			table.insert(data.objects, preserved[flag] or ClassParser[option.Class].Save(flag, option))
 		end
 
 		local success, encoded = pcall(HttpService.JSONEncode, HttpService, data)
