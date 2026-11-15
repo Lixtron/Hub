@@ -528,18 +528,67 @@ function ThemeEditor.applyWallpaper(state, source, dim, report)
 	end)
 end
 
+function ThemeEditor.paintGlow(object, color)
+	local halo = object:FindFirstChild("ControlGlow")
+	if not color then
+		if halo then halo.Visible = false end
+		return
+	end
+
+	if not halo then
+		halo = Instance.new("Frame")
+		halo.Name = "ControlGlow"
+		halo.Size = UDim2.fromScale(1, 1)
+		halo.BackgroundTransparency = 1
+		halo.BorderSizePixel = 0
+		halo.ZIndex = 0
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = halo
+
+		for index, transparency in ipairs({0.62, 0.82, 0.93}) do
+			local stroke = Instance.new("UIStroke")
+			stroke.Thickness = 2 + (index - 1) * 4
+			stroke.Transparency = transparency
+			stroke.Parent = halo
+		end
+		halo.Parent = object
+	end
+
+	for _, stroke in ipairs(halo:GetChildren()) do
+		if stroke:IsA("UIStroke") then stroke.Color = color end
+	end
+	halo.Visible = true
+end
+
 function ThemeEditor.style(state, object, kind)
 	local theme = state.theme
 	if kind == "panel" then
 		object.BackgroundColor3 = theme.panel or ThemeEditor.white
 		object.BackgroundTransparency = theme.panel and 0.22 or 0.98
-	elseif kind == "toggle" then
-		object.ImageColor3 = object:GetAttribute("MacLibEnabled") and theme.accent or ThemeEditor.neutralControl
-	elseif kind == "slider" then
-		object.BackgroundColor3 = theme.accent or ThemeEditor.neutralControl
-		object.Visible = theme.accent ~= nil
+	elseif kind == "toggle" or kind == "slider" then
+		local accent = theme.accent or (state.controlGlow and theme.stroke or nil)
+		if kind == "toggle" then
+			local enabled = object:GetAttribute("MacLibEnabled") == true
+			object.ImageColor3 = enabled and accent or ThemeEditor.neutralControl
+			ThemeEditor.paintGlow(object, state.controlGlow and enabled and accent)
+		else
+			object.BackgroundColor3 = accent or ThemeEditor.neutralControl
+			object.Visible = accent ~= nil and object.Size.X.Scale > 0
+			ThemeEditor.paintGlow(object, state.controlGlow and accent)
+		end
 	else
 		object.TextColor3 = (object.Name == "Checkmark" and theme.accent) or theme.text or ThemeEditor.white
+	end
+end
+
+function ThemeEditor.setControlGlow(state, enabled)
+	state.controlGlow = enabled == true
+	for object, kind in pairs(state.styles) do
+		if object.Parent and (kind == "toggle" or kind == "slider") then
+			ThemeEditor.style(state, object, kind)
+		end
 	end
 end
 
@@ -3375,6 +3424,7 @@ end]]
 
 					local fill = Instance.new("Frame")
 					fill.Name = "SliderFill"
+					fill.Size = UDim2.fromScale(0, 1)
 					fill.BorderSizePixel = 0
 					fill.Parent = sliderBar
 					ThemeEditor.bind(appearance, fill, "slider")
@@ -3446,6 +3496,7 @@ end]]
 						local pos = UDim2.new(posXScale, 0, 0.5, 0)
 						sliderHead.Position = pos
 						fill.Size = UDim2.fromScale(math.clamp(posXScale, 0, 1), 1)
+						fill.Visible = posXScale > 0 and (appearance.theme.accent ~= nil or appearance.controlGlow == true)
 
 						finalValue = posXScale * (SliderFunctions.Settings.Maximum - SliderFunctions.Settings.Minimum) + SliderFunctions.Settings.Minimum
 
@@ -6306,6 +6357,7 @@ end]]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autohide", state=opt.State or false }) end
 		opt = MacLib.Options["__maclib_acrylicblur"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_acrylicblur", state=opt.State or false }) end
+		table.insert(data.objects, { type="Toggle", flag="__maclib_controlglow", state=appearance.controlGlow == true })
 		opt = MacLib.Options["__maclib_togglekey"]
 		if opt then
 			local bind = opt:GetBind()
@@ -6600,6 +6652,14 @@ end]]
 				SaveGlobalUISettings()
 			end,
 		}, "__maclib_acrylicblur")
+		displaySection:Toggle({
+			Name = "Control Glow",
+			Default = false,
+			Callback = function(state)
+				ThemeEditor.setControlGlow(appearance, state)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_controlglow").IgnoreConfig = true
 
 		local automationSection = settingsTab:Section({ Name = "Automation", Side = "Left" })
 		if not disableAutoExecute then
@@ -7536,7 +7596,7 @@ end]]
 				}
 			end,
 			Load = function(Flag, data)
-				if MacLib.Options[Flag] and type(data.state) == "boolean" then
+				if Flag ~= "__maclib_controlglow" and MacLib.Options[Flag] and type(data.state) == "boolean" then
 					MacLib.Options[Flag]:UpdateState(data.state)
 				end
 			end
