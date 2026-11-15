@@ -31,8 +31,6 @@ local windowState
 local acrylicBlur
 local hasGlobalSetting
 
-local tabs = {}
-local currentTabInstance = nil
 local tabIndex = 0
 local unloaded = false
 
@@ -173,12 +171,74 @@ local function resolveTheme(Settings)
 			panel        = t.panel,
 			text         = t.text,
 			accent       = t.accent,
+			accentEnd    = t.accentEnd,
+			gradients    = t.gradients,
 			wallpaper    = t.wallpaper,
+			icon         = t.icon,
 			wallpaperDim = t.wallpaperDim,
+			wallpaperZoom = t.wallpaperZoom,
+			wallpaperX   = t.wallpaperX,
+			wallpaperY   = t.wallpaperY,
+			sidebar      = t.sidebar,
+			header       = t.header,
+			pattern      = t.pattern,
+			patternStrength = t.patternStrength,
+			weatherMode  = t.weatherMode,
+			weatherIcon  = t.weatherIcon,
+			weatherCount = t.weatherCount,
+			weatherSize  = t.weatherSize,
 		}
 	end
 	local name = (type(Settings.Theme) == "string") and Settings.Theme or "Dark"
 	return Themes[name] or Themes["Dark"]
+end
+
+do
+	local accents = {
+		Dark = {"A1B1C5", "D9E4F0"},
+		Void = {"B695FF", "7289FA"},
+		Ocean = {"65DADF", "6F9EFF"},
+		Ember = {"FF725E", "FFBD74"},
+		Forest = {"6ADBB1", "C5E985"},
+		Rose = {"F794CC", "BD92F6"},
+		Gold = {"FFD27B", "F4955E"},
+		Arctic = {"97CDFF", "A9ADF7"},
+		Halloween = {"FF842F", "FFC36A"},
+	}
+	for name, pair in pairs(accents) do
+		Themes[name].accent = Color3.fromHex(pair[1])
+		Themes[name].accentEnd = Color3.fromHex(pair[2])
+	end
+
+	for name, colors in pairs({
+		Afterglow = {"1D1524", "2C2033", "FFB0AE", "D9A9FF", "FFF2F8"},
+		["Tidal Glass"] = {"0B2025", "153239", "75E5CC", "6EADE9", "EDF9F7"},
+		["Copper Circuit"] = {"1C1916", "2B2420", "EBA16F", "EFCE92", "F9F0E6"},
+	}) do
+		local theme = table.clone(Themes.Dark)
+		theme.base = Color3.fromHex(colors[1])
+		theme.panel = Color3.fromHex(colors[2])
+		theme.accent = Color3.fromHex(colors[3])
+		theme.accentEnd = Color3.fromHex(colors[4])
+		theme.text = Color3.fromHex(colors[5])
+		theme.stroke = theme.accent
+		theme.searchBg = theme.panel
+		Themes[name] = theme
+	end
+
+	for name, look in pairs({
+		Afterglow = {sidebar = "281B32", header = "3B2540", pattern = "Diagonal", strength = 0.15},
+		["Tidal Glass"] = {sidebar = "0D2930", header = "1B4650", pattern = "Stripes", strength = 0.17},
+		["Copper Circuit"] = {sidebar = "30231B", header = "443021", pattern = "Grid", strength = 0.20},
+		Halloween = {sidebar = "241711", header = "392216", pattern = "Diagonal", strength = 0.17},
+		Void = {sidebar = "150D26", header = "1D143B", pattern = "Grid", strength = 0.12},
+	}) do
+		local theme = Themes[name]
+		theme.sidebar = Color3.fromHex(look.sidebar)
+		theme.header = Color3.fromHex(look.header)
+		theme.pattern = look.pattern
+		theme.patternStrength = look.strength
+	end
 end
 
 MacLib.Themes = Themes
@@ -348,16 +408,29 @@ local function Tween(instance, tweeninfo, propertytable)
 end
 
 local ThemeEditor = {
-	presets = {"Dark", "Void", "Ocean", "Ember", "Forest", "Rose", "Gold", "Arctic", "Halloween"},
+	presets = {"Dark", "Afterglow", "Tidal Glass", "Copper Circuit", "Halloween", "Void", "Ocean", "Ember", "Forest", "Rose", "Gold", "Arctic"},
 	colors = {
 		{ key = "base", label = "Background" },
 		{ key = "panel", label = "Panels" },
+		{ key = "sidebar", label = "Sidebar" },
+		{ key = "header", label = "Header" },
 		{ key = "text", label = "Text" },
 		{ key = "accent", label = "Accent" },
+		{ key = "accentEnd", label = "Accent Blend" },
 	},
 	white = Color3.fromRGB(255, 255, 255),
-	neutralControl = Color3.fromRGB(87, 86, 86),
-	defaultDim = 0.70,
+	defaultIcon = "rbxassetid://139436994731049",
+	patterns = {"None", "Diagonal", "Stripes", "Grid"},
+	weatherModes = {"Off", "Petals", "Rain", "Snow", "Custom"},
+	adjustments = {
+		{key = "wallpaperDim", label = "Wallpaper Dim", default = 0.70, min = 0, max = 1},
+		{key = "wallpaperZoom", label = "Zoom", default = 1, min = 1, max = 2.5},
+		{key = "wallpaperX", label = "Pan Left/Right", default = 0, min = -1, max = 1},
+		{key = "wallpaperY", label = "Pan Up/Down", default = 0, min = -1, max = 1},
+		{key = "weatherCount", label = "Weather Amount", default = 14, min = 4, max = 24, weather = true},
+		{key = "weatherSize", label = "Weather Size", default = 16, min = 8, max = 28, weather = true},
+		{key = "patternStrength", label = "Pattern Strength", default = 0.16, min = 0, max = 0.6},
+	},
 }
 
 function ThemeEditor.cleanName(value)
@@ -370,14 +443,47 @@ function ThemeEditor.cleanName(value)
 	return name
 end
 
-function ThemeEditor.cleanWallpaper(value)
+function ThemeEditor.imageAsset(value)
 	if type(value) ~= "string" or #value > 2048 then return nil end
 	local url = value:match("^%s*(.-)%s*$")
 	local id = url:match("^rbxassetid://(%d+)$") or url:match("^(%d+)$")
-	if id then return "rbxassetid://" .. id end
-	id = url:match("^https://www%.roblox%.com/asset/%?id=(%d+)$")
-	if id then return "rbxassetid://" .. id end
-	if url:match("^https://[^/%?#%s]+/[^%s]+$") then return url end
+		or url:match("^rbxthumb://type=Asset&id=(%d+)&w=%d+&h=%d+$")
+	local host, path = url:match("^https://([^/%?#%s]+)(/[^%s]*)$")
+	if host then
+		host = host:lower()
+		if host == "www.roblox.com" or host == "roblox.com" then
+			id = path:match("^/asset/?%?id=(%d+)") or path:match("^/library/(%d+)")
+				or path:match("^/catalog/(%d+)")
+		elseif host == "create.roblox.com" then
+			id = path:match("^/store/asset/(%d+)")
+		elseif host == "assetdelivery.roblox.com" then
+			id = path:match("^/v1/asset/?%?id=(%d+)")
+		end
+	end
+	if id and id:find("[1-9]") then return "rbxassetid://" .. id end
+end
+
+function ThemeEditor.readTheme(entry, preset)
+	if type(entry) ~= "table" or type(entry.colors) ~= "table" then return nil end
+	local theme = preset and table.clone(preset) or {}
+	for _, field in ipairs(ThemeEditor.colors) do
+		local hex = entry.colors[field.key]
+		if type(hex) == "string" and hex:match("^%x%x%x%x%x%x$") then
+			theme[field.key] = Color3.fromHex(hex)
+		end
+	end
+	if not (theme.base and theme.panel and theme.text and theme.accent) then return nil end
+
+	theme.gradients = entry.gradients ~= false
+	theme.wallpaper = ThemeEditor.imageAsset(entry.wallpaper)
+	theme.icon = ThemeEditor.imageAsset(entry.icon)
+	theme.pattern = entry.pattern
+	theme.weatherMode = entry.weatherMode
+	theme.weatherIcon = ThemeEditor.imageAsset(entry.weatherIcon)
+	for _, field in ipairs(ThemeEditor.adjustments) do
+		theme[field.key] = entry[field.key]
+	end
+	return ThemeEditor.preview(theme)
 end
 
 function ThemeEditor.readThemes(raw)
@@ -388,106 +494,199 @@ function ThemeEditor.readThemes(raw)
 		if ThemeEditor.cleanName(name) == name then names[#names + 1] = name end
 	end
 	table.sort(names)
-	local seen = {}
+	local used = {}
+	local count = 0
 	for _, name in ipairs(names) do
-		if #seen == 32 then break end
-		local entry = raw[name]
-		if type(entry) ~= "table" or type(entry.colors) ~= "table" or table.find(seen, name:lower()) then continue end
-		local theme = {}
-		for _, field in ipairs(ThemeEditor.colors) do
-			local hex = entry.colors[field.key]
-			if type(hex) == "string" and hex:match("^%x%x%x%x%x%x$") then
-				theme[field.key] = Color3.fromHex(hex)
+		if count == 32 then break end
+		local key = name:lower()
+		if not used[key] then
+			local theme = ThemeEditor.readTheme(raw[name])
+			if theme then
+				themes[name] = theme
+				used[key] = true
+				count += 1
 			end
-		end
-		if theme.base and theme.panel and theme.text and theme.accent then
-			theme.wallpaper = ThemeEditor.cleanWallpaper(entry.wallpaper)
-			local dim = entry.wallpaperDim
-			theme.wallpaperDim = type(dim) == "number" and math.clamp(dim, 0, 1) or ThemeEditor.defaultDim
-			themes[name] = ThemeEditor.preview(theme)
-			seen[#seen + 1] = name:lower()
 		end
 	end
 	return themes
 end
 
-function ThemeEditor.writeThemes(themes)
-	local data = {}
-	for name, theme in pairs(themes) do
-		local colors = {}
-		for _, field in ipairs(ThemeEditor.colors) do
-			colors[field.key] = theme[field.key]:ToHex()
-		end
-		data[name] = { colors = colors, wallpaper = theme.wallpaper, wallpaperDim = theme.wallpaperDim }
+function ThemeEditor.writeTheme(theme)
+	local colors = {}
+	for _, field in ipairs(ThemeEditor.colors) do
+		colors[field.key] = theme[field.key]:ToHex()
+	end
+	local data = {
+		colors = colors,
+		gradients = theme.gradients,
+		wallpaper = ThemeEditor.imageAsset(theme.wallpaper),
+		icon = ThemeEditor.imageAsset(theme.icon),
+		pattern = theme.pattern,
+		weatherMode = theme.weatherMode,
+		weatherIcon = ThemeEditor.imageAsset(theme.weatherIcon),
+	}
+	for _, field in ipairs(ThemeEditor.adjustments) do
+		data[field.key] = theme[field.key]
 	end
 	return data
 end
 
+function ThemeEditor.writeThemes(themes)
+	local data = {}
+	for name, theme in pairs(themes) do
+		data[name] = ThemeEditor.writeTheme(theme)
+	end
+	return data
+end
+
+function ThemeEditor.isGlobalFlag(flag)
+	return type(flag) == "string" and flag:sub(1, 9) == "__maclib_"
+end
+
+function ThemeEditor.palette(theme)
+	local ink = theme.text or Color3.fromRGB(241, 242, 248)
+	local accent = theme.accent or theme.stroke
+	local panel = theme.panel or theme.base:Lerp(ink, 0.065)
+	return {
+		ink = ink,
+		accent = accent,
+		accentEnd = theme.accentEnd or accent:Lerp(ink, 0.28),
+		panel = panel,
+		sidebar = theme.sidebar or theme.base:Lerp(panel, 0.45),
+		header = theme.header or panel:Lerp(accent, 0.13),
+		field = panel:Lerp(ink, 0.055),
+		hover = panel:Lerp(accent, 0.21),
+		line = panel:Lerp(ink, 0.16),
+		track = panel:Lerp(ink, 0.22),
+	}
+end
+
 function ThemeEditor.makeDraft(theme)
 	local draft = table.clone(theme)
-	draft.panel = theme.panel or theme.base:Lerp(ThemeEditor.white, 0.045)
-	draft.text = theme.text or ThemeEditor.white
-	draft.accent = theme.accent or theme.stroke
-	draft.wallpaperDim = theme.wallpaperDim or ThemeEditor.defaultDim
+	local palette = ThemeEditor.palette(theme)
+	draft.panel = palette.panel
+	draft.sidebar = palette.sidebar
+	draft.header = palette.header
+	draft.text = palette.ink
+	draft.accent = palette.accent
+	draft.accentEnd = palette.accentEnd
+	draft.gradients = theme.gradients ~= false
+	draft.pattern = table.find(ThemeEditor.patterns, theme.pattern) and theme.pattern or "None"
+	draft.weatherMode = table.find(ThemeEditor.weatherModes, theme.weatherMode) and theme.weatherMode or "Off"
+	draft.weatherIcon = ThemeEditor.imageAsset(theme.weatherIcon)
+	for _, field in ipairs(ThemeEditor.adjustments) do
+		local value = theme[field.key]
+		draft[field.key] = type(value) == "number" and value == value and math.clamp(value, field.min, field.max) or field.default
+	end
 	return draft
 end
 
 function ThemeEditor.preview(draft)
-	local theme = table.clone(draft)
+	local theme = ThemeEditor.makeDraft(draft)
 	theme.stroke = theme.accent
 	theme.searchBg = theme.panel
-	theme.baseTrans = Themes.Dark.baseTrans
-	theme.acrylicTint = Themes.Dark.acrylicTint
-	theme.acrylicTrans = Themes.Dark.acrylicTrans
-	theme.strokeTrans = Themes.Halloween.strokeTrans
-	theme.gradientStart = Themes.Halloween.gradientStart
+	theme.baseTrans = theme.baseTrans or Themes.Dark.baseTrans
+	theme.acrylicTint = theme.acrylicTint or Themes.Dark.acrylicTint
+	theme.acrylicTrans = theme.acrylicTrans or Themes.Dark.acrylicTrans
+	theme.strokeTrans = theme.strokeTrans or Themes.Halloween.strokeTrans
+	theme.gradientStart = theme.gradientStart or Themes.Halloween.gradientStart
 	return theme
 end
 
-function ThemeEditor.loadWallpaper(source)
-	if source:match("^rbxassetid://") then return source end
-	local getAsset = getcustomasset or getsynasset
-	if type(getAsset) ~= "function" or type(writefile) ~= "function" or type(makefolder) ~= "function"
-		or type(isfolder) ~= "function" or type(isfile) ~= "function" then
-		return nil, "Image links are unavailable. Try a Roblox asset ID."
+function ThemeEditor.preloadImage(source, isCurrent, callback, parent)
+	local finished = false
+	local cleanup
+	local function finish(asset, message)
+		if finished then return end
+		finished = true
+		if cleanup then cleanup() end
+		if isCurrent() then callback(asset, message) end
 	end
 
-	local first, second = 5381, 0
-	for i = 1, #source do
-		local byte = source:byte(i)
-		first = (first * 33 + byte) % 4294967296
-		second = (second * 131 + byte) % 4294967296
+	local asset = ThemeEditor.imageAsset(source)
+	if not asset then
+		finish(nil, "Enter a Roblox image or decal ID or link.")
+		return
 	end
-	local folder = "LixHub/ui_wallpapers"
-	local path = string.format("%s/%08x%08x", folder, first, second)
-	for _, extension in ipairs({".png", ".jpg"}) do
-		if isfile(path .. extension) then
-			local ok, asset = pcall(getAsset, path .. extension)
-			if ok and type(asset) == "string" and asset ~= "" then return asset end
+
+	task.delay(18, function() finish(nil, "Roblox took too long to load this image.") end)
+	task.spawn(function()
+		local id = asset:match("^rbxassetid://(%d+)$")
+		local loadError = "Roblox could not load this asset. Check that it is an approved image or decal you can access."
+
+		local function attempt(uri, allowThumbnail)
+			if finished or not isCurrent() then return end
+
+			local candidate = Instance.new("ImageLabel")
+			candidate.Name = "ThemeImageCheck"
+			candidate.BackgroundTransparency = 1
+			candidate.ImageTransparency = 1
+			candidate.Size = UDim2.fromOffset(1, 1)
+			candidate.Image = uri
+			candidate.Parent = parent
+
+			local active = true
+			local loadedConnection
+			local function discard()
+				active = false
+				if loadedConnection then loadedConnection:Disconnect() end
+				candidate:Destroy()
+			end
+			cleanup = discard
+
+			local function settle(loaded)
+				if not active then return end
+				cleanup = nil
+				discard()
+				if not isCurrent() then return end
+				if loaded then
+					finish(uri)
+				elseif allowThumbnail then
+					local ok, info = pcall(function()
+						local marketplace = MacLib.GetService("MarketplaceService")
+						return marketplace:GetProductInfoAsync(tonumber(id), Enum.InfoType.Asset)
+					end)
+					if not isCurrent() or finished then return end
+					local assetType = ok and type(info) == "table" and info.AssetTypeId
+					if assetType == Enum.AssetType.Decal.Value or assetType == Enum.AssetType.Image.Value then
+						attempt("rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420", false)
+					else
+						finish(nil, assetType and "This asset is not a Roblox decal or image." or loadError)
+					end
+				else
+					finish(nil, loadError)
+				end
+			end
+
+			loadedConnection = candidate:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+				if candidate.IsLoaded then settle(true) end
+			end)
+			task.delay(5, function()
+				if active then settle(candidate.IsLoaded) end
+			end)
+
+			if candidate.IsLoaded then
+				settle(true)
+				return
+			end
+			local status
+			pcall(ContentProvider.PreloadAsync, ContentProvider, {candidate}, function(_, result)
+				status = result
+			end)
+			if not active then return end
+			if status == Enum.AssetFetchStatus.Success or candidate.IsLoaded then
+				settle(true)
+			elseif status == Enum.AssetFetchStatus.Failure then
+				settle(false)
+			end
 		end
-	end
 
-	local body = game:HttpGet(source)
-	if type(body) ~= "string" or #body > 6 * 1024 * 1024 then
-		return nil, "Use a PNG or JPG under 6 MB."
-	end
-	local extension
-	if body:sub(1, 8) == "\137PNG\r\n\26\n" then
-		extension = ".png"
-	elseif body:sub(1, 3) == "\255\216\255" then
-		extension = ".jpg"
-	else
-		return nil, "Use a direct link to a PNG or JPG."
-	end
-	if not isfolder("LixHub") then makefolder("LixHub") end
-	if not isfolder(folder) then makefolder(folder) end
-	writefile(path .. extension, body)
-	return getAsset(path .. extension)
+		attempt(asset, true)
+	end)
 end
 
-function ThemeEditor.applyWallpaper(state, source, dim, report)
+function ThemeEditor.applyWallpaper(state, source, report)
 	local image = state.wallpaper
-	image.ImageTransparency = dim or ThemeEditor.defaultDim
 	if source == state.wallpaperSource and (not report or image.Image ~= "") then
 		if report then report() end
 		return
@@ -499,33 +698,44 @@ function ThemeEditor.applyWallpaper(state, source, dim, report)
 	image.Visible = false
 	if not source then return end
 
-	local finished = false
-	local function finish(asset, message)
-		if finished or state.wallpaperRequest ~= request or not image.Parent then return end
-		finished = true
+	ThemeEditor.preloadImage(source, function()
+		return state.wallpaperRequest == request and image.Parent ~= nil
+	end, function(asset, message)
 		if asset then
 			image.Image = asset
 			image.Visible = true
 		end
+		ThemeEditor.updateBackdrop(state)
 		if report then report(not asset and (message or "Could not load the wallpaper.") or nil) end
+	end, state.base)
+end
+
+function ThemeEditor.applyIcon(state, source, report)
+	if source == state.iconSource and (not report or state.iconAsset) then
+		if report then report() end
+		return
 	end
-	task.delay(12, function() finish(nil) end)
-	task.spawn(function()
-		local ok, asset, message = pcall(ThemeEditor.loadWallpaper, source)
-		if not ok or type(asset) ~= "string" or asset == "" then
-			finish(nil, ok and message or nil)
-			return
-		end
-		if finished or request ~= state.wallpaperRequest or not image.Parent then return end
-		local candidate = Instance.new("ImageLabel")
-		candidate.Image = asset
-		local loaded = false
-		local preloaded = pcall(ContentProvider.PreloadAsync, ContentProvider, {candidate}, function(_, status)
-			loaded = status == Enum.AssetFetchStatus.Success
-		end)
-		candidate:Destroy()
-		finish(preloaded and loaded and asset or nil)
-	end)
+	state.iconSource = source
+	state.iconRequest += 1
+	local request = state.iconRequest
+
+	local function show(asset)
+		state.iconAsset = asset
+		local image = asset or ThemeEditor.defaultIcon
+		if state.headerIcon then state.headerIcon.Image = image end
+		if state.minimizedIcon then state.minimizedIcon.Image = image end
+		if state.watermarkIcon then state.watermarkIcon.Image = image end
+	end
+
+	if not source or not report then show(nil) end
+	if not source then return end
+	state.iconAsset = nil
+	ThemeEditor.preloadImage(source, function()
+		return state.iconRequest == request and state.wallpaper.Parent ~= nil
+	end, function(asset, message)
+		if asset then show(asset) end
+		if report then report(not asset and (message or "Could not load the icon.") or nil) end
+	end, state.base)
 end
 
 function ThemeEditor.paintGlow(object, color)
@@ -562,25 +772,808 @@ function ThemeEditor.paintGlow(object, color)
 	halo.Visible = true
 end
 
-function ThemeEditor.style(state, object, kind)
-	local theme = state.theme
-	if kind == "panel" then
-		object.BackgroundColor3 = theme.panel or ThemeEditor.white
-		object.BackgroundTransparency = theme.panel and 0.22 or 0.98
-	elseif kind == "toggle" or kind == "slider" then
-		local accent = theme.accent or (state.controlGlow and theme.stroke or nil)
-		if kind == "toggle" then
-			local enabled = object:GetAttribute("MacLibEnabled") == true
-			object.ImageColor3 = enabled and accent or ThemeEditor.neutralControl
-			ThemeEditor.paintGlow(object, state.controlGlow and enabled and accent)
-		else
-			object.BackgroundColor3 = accent or ThemeEditor.neutralControl
-			object.Visible = accent ~= nil and object.Size.X.Scale > 0
-			ThemeEditor.paintGlow(object, state.controlGlow and accent)
+function ThemeEditor.gradient(object, startColor, endColor, enabled)
+	local gradient = object:FindFirstChild("PaletteBlend")
+	if enabled then
+		if not gradient then
+			gradient = Instance.new("UIGradient")
+			gradient.Name = "PaletteBlend"
+			gradient.Parent = object
 		end
-	else
-		object.TextColor3 = (object.Name == "Checkmark" and theme.accent) or theme.text or ThemeEditor.white
+		gradient.Color = ColorSequence.new(startColor, endColor)
 	end
+	if gradient then gradient.Enabled = enabled end
+end
+
+function ThemeEditor.animate(state, object, info, properties)
+	if state.reduceMotion then
+		for property, value in pairs(properties) do object[property] = value end
+	else
+		Tween(object, info, properties):Play()
+	end
+end
+
+function ThemeEditor.windowTransparency(theme, acrylic)
+	return acrylic and math.clamp(theme.baseTrans + 0.27, 0, 0.75) or 0
+end
+
+function ThemeEditor.setAcrylic(state, enabled)
+	state.acrylic = enabled == true
+	for object, kind in pairs(state.styles) do
+		if object.Parent and (kind == "sidebar" or kind == "panel" or kind == "field" or kind == "action") then
+			ThemeEditor.style(state, object, kind)
+		end
+	end
+end
+
+function ThemeEditor.style(state, object, kind, hovered)
+	local palette = state.palette
+	if kind == "toggle" or kind == "slider" then
+		local enabled = kind == "slider" or object:GetAttribute("MacLibEnabled") == true
+		local blend = enabled and state.theme.gradients ~= false
+		local accent = enabled and palette.accent or palette.track
+		ThemeEditor.gradient(object, palette.accent, palette.accentEnd, blend)
+		if kind == "toggle" then
+			local highlight = state.hovered[object] == true
+			local target = blend and (highlight and Color3.fromRGB(245, 245, 255) or ThemeEditor.white)
+				or (highlight and accent:Lerp(palette.ink, 0.2) or accent)
+			local outline = object:FindFirstChild("ToggleOutline")
+			if outline then
+				outline.Color = palette.accent
+				local transparency = highlight and 0.25 or 1
+				if hovered then
+					ThemeEditor.animate(state, outline, TweenInfo.new(0.13, Enum.EasingStyle.Quad), {Transparency = transparency})
+				else
+					outline.Transparency = transparency
+				end
+			end
+			object.ImageColor3 = target
+			local head = object:FindFirstChild("TogglerHead")
+			if head then
+				head.ImageColor3 = enabled and Color3.fromRGB(27, 26, 32) or palette.ink
+			end
+		else
+			object.BackgroundColor3 = blend and ThemeEditor.white or accent
+			object.Visible = object.Size.X.Scale > 0
+		end
+		ThemeEditor.paintGlow(object, state.controlGlow and enabled and palette.accent)
+	elseif kind == "text" then
+		object.TextColor3 = object.Name == "Checkmark" and palette.accent or palette.ink
+		if object:IsA("TextBox") then object.PlaceholderColor3 = palette.ink:Lerp(palette.panel, 0.33) end
+	elseif kind == "icon" or kind == "track" then
+		object.ImageColor3 = kind == "icon" and palette.accent or palette.track
+	elseif kind == "line" then
+		if object:IsA("UIStroke") then
+			object.Color = palette.line
+		else
+			object.BackgroundColor3 = palette.line
+		end
+	elseif kind == "brandRing" then
+		local blend = state.theme.gradients ~= false
+		object.Color = blend and ThemeEditor.white or palette.accent
+		ThemeEditor.gradient(object, palette.accent, palette.accentEnd, blend)
+	elseif kind == "windowWash" then
+		object.BackgroundColor3 = palette.header
+		object.BackgroundTransparency = state.theme.gradients == false and 1 or 0.76
+	elseif kind == "sidebar" or kind == "panel" then
+		object.BackgroundColor3 = palette[kind]
+		if state.acrylic then
+			object.BackgroundTransparency = kind == "panel" and 0.57 or 0.64
+		else
+			object.BackgroundTransparency = state.theme.wallpaper and 0.28 or 0.10
+		end
+	elseif kind == "mark" then
+		object.BackgroundColor3 = palette.accent
+	elseif kind == "field" or kind == "action" or kind == "option" then
+		local isFocused = object:IsA("TextBox") and object:IsFocused()
+		local isHovered = state.hovered[object] == true or isFocused
+		local color = isHovered and palette.hover or palette.field
+		local fieldTransparency = state.acrylic and 0.36 or 0.12
+		local transparency = kind == "option" and (isHovered and 0.05 or 1) or fieldTransparency
+		local stroke = object:FindFirstChildWhichIsA("UIStroke")
+		if object:IsA("TextBox") then
+			object.TextColor3 = palette.ink
+			object.PlaceholderColor3 = palette.ink:Lerp(palette.panel, 0.33)
+		elseif object:IsA("TextButton") and kind == "action" then
+			object.TextColor3 = palette.ink
+		end
+		local transition = state.transitions[object]
+		if transition then transition:Cancel() end
+		if hovered and not state.reduceMotion then
+			transition = Tween(object, TweenInfo.new(0.14, Enum.EasingStyle.Quad), {
+				BackgroundColor3 = color,
+				BackgroundTransparency = transparency,
+			})
+			state.transitions[object] = transition
+			transition:Play()
+		else
+			state.transitions[object] = nil
+			object.BackgroundColor3 = color
+			object.BackgroundTransparency = transparency
+		end
+		if stroke then stroke.Color = isHovered and palette.accent or palette.line end
+	elseif kind == "navigation" then
+		object.BackgroundColor3 = palette.sidebar:Lerp(palette.accent, 0.34)
+		local stroke = object:FindFirstChildWhichIsA("UIStroke")
+		if stroke then stroke.Color = palette.accent end
+	end
+end
+
+function ThemeEditor.motion(state, button, surface, kind, press)
+	button.AutoButtonColor = false
+	if kind then
+		ThemeEditor.bind(state, surface, kind)
+		button.MouseEnter:Connect(function()
+			state.hovered[surface] = true
+			ThemeEditor.style(state, surface, kind, true)
+		end)
+		button.MouseLeave:Connect(function()
+			state.hovered[surface] = nil
+			ThemeEditor.style(state, surface, kind, true)
+		end)
+	end
+	if not press then return end
+
+	local scale = Instance.new("UIScale")
+	scale.Parent = surface
+	button.Activated:Connect(function()
+		if state.reduceMotion then return end
+		scale.Scale = 0.97
+		Tween(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quart), {Scale = 1}):Play()
+	end)
+end
+
+function ThemeEditor.frame(parent, name, radius)
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.BorderSizePixel = 0
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = frame
+	frame.Parent = parent
+	return frame
+end
+
+function ThemeEditor.backdrop(parent, radius)
+	local clip = Instance.new("Frame")
+	clip.Name = "ThemeBackdrop"
+	clip.BackgroundTransparency = 1
+	clip.BorderSizePixel = 0
+	clip.ClipsDescendants = true
+	clip.Position = UDim2.fromOffset(5, 5)
+	clip.Size = UDim2.new(1, -10, 1, -10)
+	clip.ZIndex = 0
+	clip.Parent = parent
+
+	local wallpaperMask = Instance.new("CanvasGroup")
+	wallpaperMask.Name = "WallpaperMask"
+	wallpaperMask.BackgroundTransparency = 1
+	wallpaperMask.BorderSizePixel = 0
+	wallpaperMask.Size = UDim2.fromScale(1, 1)
+	wallpaperMask.ZIndex = 0
+	wallpaperMask.Visible = false
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = wallpaperMask
+	wallpaperMask.Parent = clip
+
+	local image = Instance.new("ImageLabel")
+	image.Name = "Wallpaper"
+	image.AnchorPoint = Vector2.new(0.5, 0.5)
+	image.BackgroundTransparency = 1
+	image.ScaleType = Enum.ScaleType.Crop
+	image.Visible = false
+	image.ZIndex = 0
+	image.Parent = wallpaperMask
+
+	local pattern = Instance.new("Frame")
+	pattern.Name = "Pattern"
+	pattern.Size = UDim2.fromScale(1, 1)
+	pattern.BackgroundTransparency = 1
+	pattern.BorderSizePixel = 0
+	pattern.ZIndex = 0
+	pattern.Parent = clip
+	return image, pattern
+end
+
+function ThemeEditor.layoutWallpaper(image, theme)
+	local zoom = theme.wallpaperZoom
+	local travel = (zoom - 1) / 2
+	image.Size = UDim2.fromScale(zoom, zoom)
+	image.Position = UDim2.fromScale(0.5 + travel * theme.wallpaperX, 0.5 + travel * theme.wallpaperY)
+	image.ImageTransparency = theme.wallpaperDim
+	image.Parent.Visible = image.Visible
+end
+
+function ThemeEditor.drawPattern(container, theme, color)
+	local name = theme.pattern
+	local redraw = container:GetAttribute("Pattern") ~= name
+	if redraw then
+		container:ClearAllChildren()
+		container:SetAttribute("Pattern", name)
+		local function line(x, y, width, height, angle)
+			local mark = Instance.new("Frame")
+			mark.AnchorPoint = Vector2.new(0.5, 0.5)
+			mark.Position = UDim2.fromScale(x, y)
+			mark.Size = UDim2.new(width, width == 0 and 1 or 0, height, height == 0 and 1 or 0)
+			mark.Rotation = angle
+			mark.BorderSizePixel = 0
+			mark.ZIndex = 0
+			mark.Parent = container
+		end
+		if name ~= "None" then
+			for index = 0, 18 do
+				local step = index / 18
+				if name == "Diagonal" then
+					line(-0.5 + 2 * step, 0.5, 2.25, 0, -26)
+				else
+					line(0.5, step, 1, 0, 0)
+					if name == "Grid" then line(step, 0.5, 0, 1, 0) end
+				end
+			end
+		end
+	end
+	container.Visible = name ~= "None" and theme.patternStrength > 0
+	if not redraw and container:GetAttribute("PatternColor") == color
+		and container:GetAttribute("PatternStrength") == theme.patternStrength then return end
+	container:SetAttribute("PatternColor", color)
+	container:SetAttribute("PatternStrength", theme.patternStrength)
+	for _, mark in ipairs(container:GetChildren()) do
+		mark.BackgroundColor3 = color
+		mark.BackgroundTransparency = 1 - theme.patternStrength
+	end
+end
+
+function ThemeEditor.createSample(state, parent)
+	local frame = ThemeEditor.frame(parent, "ThemePreview", 10)
+	frame.Size = UDim2.new(1, 0, 0, 100)
+	frame.LayoutOrder = -2
+	frame.ClipsDescendants = true
+	local image, pattern = ThemeEditor.backdrop(frame, 5)
+
+	local panel = ThemeEditor.frame(frame, "SamplePanel", 8)
+	panel.Position = UDim2.fromOffset(12, 39)
+	panel.Size = UDim2.new(1, -24, 0, 49)
+	panel.ZIndex = 1
+	local border = Instance.new("UIStroke")
+	border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	border.Parent = panel
+
+	local sampleText = Instance.new("TextLabel")
+	sampleText.Name = "PreviewTitle"
+	sampleText.Position = UDim2.fromOffset(13, 9)
+	sampleText.Size = UDim2.new(1, -26, 0, 24)
+	sampleText.BackgroundTransparency = 1
+	sampleText.TextXAlignment = Enum.TextXAlignment.Left
+	sampleText.Text = "Live Preview"
+	sampleText.TextSize = 16
+	sampleText.FontFace = Font.new(assets.interFont, Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+	sampleText.ZIndex = 1
+	sampleText.Parent = frame
+
+	local toggle = ThemeEditor.frame(panel, "Toggle", 9)
+	toggle.Position = UDim2.fromOffset(9, 8)
+	toggle.Size = UDim2.fromOffset(35, 18)
+	local knob = ThemeEditor.frame(toggle, "Knob", 6)
+	knob.Position = UDim2.fromOffset(18, 3)
+	knob.Size = UDim2.fromOffset(12, 12)
+	knob.BackgroundColor3 = Color3.fromRGB(28, 27, 33)
+
+	local button = ThemeEditor.frame(panel, "Button", 6)
+	button.Position = UDim2.new(1, -9, 0, 8)
+	button.AnchorPoint = Vector2.new(1, 0)
+	button.Size = UDim2.fromOffset(58, 18)
+	local buttonText = Instance.new("TextLabel")
+	buttonText.Name = "SampleAction"
+	buttonText.Size = UDim2.fromScale(1, 1)
+	buttonText.BackgroundTransparency = 1
+	buttonText.Text = "Button"
+	buttonText.TextSize = 11
+	buttonText.FontFace = Font.new(assets.interFont)
+	buttonText.Parent = button
+
+	local track = ThemeEditor.frame(panel, "Track", 2)
+	track.Position = UDim2.fromOffset(9, 34)
+	track.Size = UDim2.new(1, -18, 0, 5)
+	local fill = ThemeEditor.frame(track, "Fill", 2)
+	fill.Size = UDim2.fromScale(0.62, 1)
+
+	state.renderSample = function(theme, palette)
+		frame.BackgroundColor3 = palette.header
+		sampleText.TextColor3 = palette.ink
+		panel.BackgroundColor3 = palette.panel
+		panel.BackgroundTransparency = state.wallpaper.Visible and 0.24 or 0.04
+		border.Color = palette.line
+		button.BackgroundColor3 = palette.hover
+		buttonText.TextColor3 = palette.ink
+		track.BackgroundColor3 = palette.track
+		local blend = theme.gradients ~= false
+		toggle.BackgroundColor3 = blend and ThemeEditor.white or palette.accent
+		fill.BackgroundColor3 = toggle.BackgroundColor3
+		ThemeEditor.gradient(toggle, palette.accent, palette.accentEnd, blend)
+		ThemeEditor.gradient(fill, palette.accent, palette.accentEnd, blend)
+		image.Image = state.wallpaper.Image
+		image.Visible = state.wallpaper.Visible
+		ThemeEditor.layoutWallpaper(image, theme)
+		ThemeEditor.drawPattern(pattern, theme, palette.accentEnd)
+	end
+	ThemeEditor.updateBackdrop(state)
+end
+
+function ThemeEditor.updateWeatherAnimation(state)
+	local weather = state.weather
+	local theme = state.backdropTheme
+	if not weather or not theme or weather.disposed then return end
+
+	local mode = theme.weatherMode
+	local asset = weather.asset
+	local active = mode ~= "Off" and (mode ~= "Custom" or asset ~= nil)
+		and state.base.Visible and (not weather.screen or weather.screen.Enabled)
+		and not state.reduceMotion and not state.resizing
+	weather.layer.Visible = active
+	if not active then
+		if weather.render then
+			weather.render:Disconnect()
+			weather.render = nil
+		end
+		return
+	end
+
+	local count = math.round(theme.weatherCount)
+	local size = theme.weatherSize
+	local accent = state.palette.accent
+	local secondary = state.palette.accentEnd
+	local pool = weather.pool
+	if weather.mode ~= mode or weather.count ~= count or weather.size ~= size
+		or weather.accent ~= accent or weather.secondary ~= secondary or weather.renderedAsset ~= asset then
+		weather.mode, weather.count, weather.size = mode, count, size
+		weather.accent, weather.secondary, weather.renderedAsset = accent, secondary, asset
+
+		for index = #pool + 1, count do
+			local particle = Instance.new("ImageLabel")
+			particle.Name = "WeatherIcon"
+			particle.AnchorPoint = Vector2.new(0.5, 0.5)
+			particle.BorderSizePixel = 0
+			particle.ScaleType = Enum.ScaleType.Fit
+			particle.Parent = weather.layer
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0.5, 0)
+			corner.Parent = particle
+			pool[index] = {gui = particle, corner = corner, x = 0.06 + math.random() * 0.88, y = math.random(), variance = math.random()}
+		end
+		for index, particle in ipairs(pool) do
+			local gui = particle.gui
+			gui.Visible = index <= count
+			if gui.Visible then
+				local width = size * (0.66 + particle.variance * 0.34)
+				local height = width
+				if mode == "Rain" then
+					width, height = math.max(2, width * 0.16), height * 1.15
+				elseif mode == "Snow" then
+					width, height = width * 0.4, height * 0.4
+				elseif mode == "Petals" then
+					height = height * 0.55
+				end
+				gui.Size = UDim2.fromOffset(width, height)
+				particle.corner.CornerRadius = UDim.new(mode == "Custom" and 0 or 0.5, 0)
+				gui.Rotation = mode == "Petals" and particle.variance * 100 - 50 or 0
+				gui.Position = UDim2.fromScale(particle.x, particle.y)
+				gui.BackgroundColor3 = accent:Lerp(secondary, particle.variance)
+				gui.BackgroundTransparency = mode == "Custom" and 1 or 0.34
+				gui.Image = mode == "Custom" and asset or ""
+				gui.ImageTransparency = 0.26
+			end
+		end
+	end
+
+	if weather.render then return end
+	local elapsed = 0
+	weather.render = RunService.RenderStepped:Connect(function(dt)
+		elapsed += dt
+		if elapsed < 1 / 30 then return end
+		local step = math.min(elapsed, 0.1)
+		elapsed = 0
+		local rain = weather.mode == "Rain"
+		local speed = rain and 0.48 or 0.10
+		for index = 1, weather.count do
+			local particle = pool[index]
+			particle.y += step * speed * (0.65 + particle.variance * 0.7)
+			if particle.y > 1.07 then
+				particle.y = -0.07
+				particle.x = 0.06 + math.random() * 0.88
+			end
+			local sway = rain and 0 or math.sin(particle.y * 8 + particle.variance * 6.28) * 0.035
+			particle.gui.Position = UDim2.fromScale(particle.x + sway, particle.y)
+		end
+	end)
+end
+
+function ThemeEditor.applyWeatherIcon(state, source, report)
+	local weather = state.weather
+	if source == weather.source and (not report or weather.asset) then
+		if report then report() end
+		return
+	end
+	weather.source = source
+	weather.asset = nil
+	weather.request += 1
+	local request = weather.request
+	if not source then return end
+
+	ThemeEditor.preloadImage(source, function()
+		return not weather.disposed and weather.request == request and weather.layer.Parent ~= nil
+	end, function(asset, message)
+		weather.asset = asset
+		if report then report(not asset and (message or "Could not load the weather icon.") or nil) end
+		ThemeEditor.updateWeatherAnimation(state)
+	end, state.base)
+end
+
+function ThemeEditor.updateBackdrop(state, draft)
+	local theme = draft or state.backdropTheme
+	if not theme then return end
+	state.backdropTheme = theme
+	local palette = state.palette
+	ThemeEditor.layoutWallpaper(state.wallpaper, theme)
+	ThemeEditor.drawPattern(state.pattern, theme, palette.accentEnd)
+	if theme.weatherMode == "Custom" then
+		ThemeEditor.applyWeatherIcon(state, state.pendingWeatherIcon or theme.weatherIcon)
+	else
+		ThemeEditor.applyWeatherIcon(state, nil)
+	end
+	ThemeEditor.updateWeatherAnimation(state)
+	if state.renderSample then state.renderSample(theme, palette) end
+end
+
+function ThemeEditor.addDiscordFooter(state, parent)
+	local button = Instance.new("TextButton")
+	button.Name = "DiscordFooter"
+	button.Text = ""
+	button.BorderSizePixel = 0
+	button.AnchorPoint = Vector2.new(0, 1)
+	button.Position = UDim2.fromScale(0, 1)
+	button.Size = UDim2.new(1, 0, 0, 44)
+	button.Parent = parent
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = button
+	local outline = Instance.new("UIStroke")
+	outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	outline.Transparency = 0.3
+	outline.Parent = button
+	ThemeEditor.motion(state, button, button, "action", true)
+
+	local icon = Instance.new("Frame")
+	icon.Name = "DiscordIcon"
+	icon.AnchorPoint = Vector2.new(0, 0.5)
+	icon.Position = UDim2.new(0, 12, 0.5, 0)
+	icon.Size = UDim2.fromOffset(24, 18)
+	icon.BackgroundTransparency = 1
+	icon.Parent = button
+
+	local glyph = {
+		".......##......##.......",
+		"....################....",
+		"...##################...",
+		"..####################..",
+		"..####################..",
+		".######################.",
+		".######################.",
+		".######################.",
+		"######....####....######",
+		"######....####....######",
+		"######....####....######",
+		"######....####....######",
+		"########################",
+		"########################",
+		"########################",
+		".######..######..######.",
+		"...####..........####...",
+		".....#............#.....",
+	}
+	for row, pixels in ipairs(glyph) do
+		for x, strip in pixels:gmatch("()(#+)") do
+			local fill = Instance.new("Frame")
+			fill.Position = UDim2.fromOffset(x - 1, row - 1)
+			fill.Size = UDim2.fromOffset(#strip, 1)
+			fill.BorderSizePixel = 0
+			fill.BackgroundColor3 = ThemeEditor.white
+			fill.Parent = icon
+		end
+	end
+
+	local label = Instance.new("TextLabel")
+	label.Name = "DiscordLabel"
+	label.Text = "Discord Invite"
+	label.FontFace = Font.new(assets.interFont, Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+	label.TextSize = 13
+	label.TextColor3 = ThemeEditor.white
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.fromOffset(45, 0)
+	label.Size = UDim2.new(1, -77, 1, 0)
+	label.Parent = button
+
+	for _, offset in ipairs({0, 4}) do
+		local square = ThemeEditor.frame(button, "CopyOutline", 2)
+		square.BackgroundTransparency = 1
+		square.Position = UDim2.new(1, -24 + offset, 0.5, -7 + offset)
+		square.Size = UDim2.fromOffset(9, 9)
+		local edge = Instance.new("UIStroke")
+		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		edge.Transparency = offset == 0 and 0.45 or 0.16
+		edge.Parent = square
+		ThemeEditor.bind(state, edge, "brandRing")
+	end
+
+	local status = false
+	button.Activated:Connect(function()
+		if status then return end
+		status = true
+		local clipboard = type(setclipboard) == "function" and setclipboard or toclipboard
+		local ok, result = pcall(clipboard, "https://discord.gg/6wEFzDAeYn")
+		label.Text = ok and result ~= false and "Invite copied" or "Copy unavailable"
+		task.delay(1.5, function()
+			if not button.Parent then return end
+			label.Text = "Discord Invite"
+			status = false
+		end)
+	end)
+end
+
+function ThemeEditor.resizeDimensions(viewport, origin, scale, startSize, delta)
+	local maxWidth = math.max(1, math.min(1280, math.floor((viewport.X - origin.X - 8) / scale)))
+	local maxHeight = math.max(1, math.min(900, math.floor((viewport.Y - origin.Y - 8) / scale)))
+	return Vector2.new(
+		math.clamp(math.round(startSize.X + delta.X / scale), math.min(600, maxWidth), maxWidth),
+		math.clamp(math.round(startSize.Y + delta.Y / scale), math.min(400, maxHeight), maxHeight)
+	)
+end
+
+function ThemeEditor.addResizeGrip(state, base, getViewport, applySize, save)
+	local grip = Instance.new("TextButton")
+	grip.Name = "ResizeGrip"
+	grip.Text = ""
+	grip.Active = true
+	grip.AnchorPoint = Vector2.new(1, 1)
+	grip.Position = UDim2.new(1, -5, 1, -5)
+	grip.Size = UDim2.fromOffset(30, 30)
+	grip.BackgroundTransparency = 1
+	grip.BorderSizePixel = 0
+	grip.ZIndex = 8
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 7)
+	corner.Parent = grip
+	for row = 0, 2 do
+		for column = 0, row do
+			local dot = ThemeEditor.frame(grip, "GripDot", 2)
+			dot.Size = UDim2.fromOffset(3, 3)
+			dot.Position = UDim2.fromOffset(20 - column * 5, 10 + row * 5)
+			dot.ZIndex = grip.ZIndex + 1
+			ThemeEditor.bind(state, dot, "mark")
+		end
+	end
+	grip.Parent = base
+	state.resizeGrip = grip
+	ThemeEditor.motion(state, grip, grip, "option", false)
+
+	local drag
+	local function update()
+		if not drag or not drag.pointer or not base.Visible then return end
+		local delta = drag.pointer - drag.start
+		if not drag.target and delta.Magnitude < 3 then return end
+		local size = ThemeEditor.resizeDimensions(getViewport(), drag.origin, drag.scale, drag.size, delta)
+		if size == (drag.target or drag.size) then return end
+		drag.target = size
+		applySize(size, drag.origin, drag.scale)
+	end
+
+	local function finish()
+		if not drag then return end
+		local previous = drag
+		drag = nil
+		state.resizing = nil
+		ThemeEditor.updateWeatherAnimation(state)
+		if previous.render then previous.render:Disconnect() end
+		if previous.target then save() end
+	end
+
+	grip.InputBegan:Connect(function(input)
+		local kind = input.UserInputType
+		if drag or (kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch) then return end
+		local scale = base.BaseUIScale.Scale
+		if scale <= 0 or base.AbsoluteSize.X <= 0 then return end
+		drag = {
+			input = input,
+			touch = kind == Enum.UserInputType.Touch,
+			start = input.Position,
+			origin = base.AbsolutePosition - base.Parent.AbsolutePosition,
+			size = base.AbsoluteSize / scale,
+			scale = scale,
+		}
+		state.resizing = true
+		ThemeEditor.updateWeatherAnimation(state)
+	end)
+	local moved = UserInputService.InputChanged:Connect(function(input)
+		if not drag then return end
+		if drag.touch and input ~= drag.input then return end
+		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		drag.pointer = input.Position
+		if not drag.render then drag.render = RunService.RenderStepped:Connect(update) end
+	end)
+	local ended = UserInputService.InputEnded:Connect(function(input)
+		if not drag then return end
+		if drag.touch and input ~= drag.input then return end
+		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		if input.UserInputState ~= Enum.UserInputState.Cancel then
+			if drag.touch then drag.pointer = input.Position end
+			update()
+		end
+		finish()
+	end)
+	base:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not base.Visible then finish() end
+	end)
+	base.Destroying:Connect(function()
+		if drag and drag.render then drag.render:Disconnect() end
+		moved:Disconnect()
+		ended:Disconnect()
+	end)
+end
+
+function ThemeEditor.dragOverlay(root, widget, save, activate)
+	widget.Active = true
+
+	local function place(x, y)
+		local area = root.AbsoluteSize
+		local size = widget.AbsoluteSize
+		if area.X <= 0 or area.Y <= 0 or size.X <= 0 or size.Y <= 0 then return end
+
+		local margin = 8
+		local minX = math.min(margin, math.max(0, area.X - size.X))
+		local minY = math.min(margin, math.max(0, area.Y - size.Y))
+		local left = math.clamp(x, minX, math.max(minX, area.X - size.X - margin))
+		local top = math.clamp(y, minY, math.max(minY, area.Y - size.Y - margin))
+		if widget.Position.X.Offset ~= left or widget.Position.Y.Offset ~= top then
+			widget.Position = UDim2.fromOffset(left, top)
+		end
+	end
+
+	local function clamp()
+		if not widget.Parent then return end
+		place(widget.Position.X.Offset, widget.Position.Y.Offset)
+	end
+
+	local drag, touchPress
+	local suppressClick = false
+	widget.InputBegan:Connect(function(input)
+		local kind = input.UserInputType
+		if drag or (kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch) then return end
+		drag = {
+			input = input,
+			touch = kind == Enum.UserInputType.Touch,
+			start = input.Position,
+			position = widget.Position,
+		}
+		touchPress = drag.touch and input or nil
+		suppressClick = false
+	end)
+	local moved = UserInputService.InputChanged:Connect(function(input)
+		if not drag or not widget.Visible then return end
+		if drag.touch and input ~= drag.input then return end
+		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		local delta = input.Position - drag.start
+		if not suppressClick and delta.Magnitude < 5 then return end
+		suppressClick = true
+		place(drag.position.X.Offset + delta.X, drag.position.Y.Offset + delta.Y)
+	end)
+	local ended = UserInputService.InputEnded:Connect(function(input)
+		if not drag then return end
+		if drag.touch and input ~= drag.input then return end
+		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		local start = drag.position
+		drag = nil
+		local position = widget.Position
+		if suppressClick and position ~= start then
+			save(position.X.Offset, position.Y.Offset)
+		end
+	end)
+
+	if activate then
+		widget.Activated:Connect(function(input)
+			local kind = input.UserInputType
+			if kind == Enum.UserInputType.Touch and input ~= touchPress then return end
+			local pointer = kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch
+			if not pointer or not suppressClick then activate() end
+		end)
+	end
+	local changed = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp)
+	widget:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp)
+	widget.Destroying:Connect(function()
+		moved:Disconnect()
+		ended:Disconnect()
+		changed:Disconnect()
+	end)
+	task.defer(clamp)
+	return clamp
+end
+
+function ThemeEditor.bouncePage(state, page, reopening)
+	local current = state.pageMotion
+	if current then
+		current.tween:Cancel()
+		current.page.Position = UDim2.fromOffset(0, 0)
+		state.pageMotion = nil
+	end
+	if not page or state.reduceMotion then return end
+
+	page.Position = UDim2.fromOffset(0, reopening and 7 or 16)
+	local easing = reopening and Enum.EasingStyle.Quad or Enum.EasingStyle.Back
+	local duration = reopening and 0.14 or 0.24
+	local tween = Tween(page, TweenInfo.new(duration, easing, Enum.EasingDirection.Out), {
+		Position = UDim2.fromOffset(0, 0),
+	})
+	state.pageMotion = {page = page, tween = tween}
+	tween:Play()
+end
+
+function ThemeEditor.windowControls(state, disabled)
+	local frame = Instance.new("Frame")
+	frame.Name = "WindowControls"
+	frame.AnchorPoint = Vector2.new(1, 0.5)
+	frame.Position = UDim2.new(1, -14, 0.5, 0)
+	frame.Size = UDim2.fromOffset(0, 30)
+	frame.AutomaticSize = Enum.AutomaticSize.X
+	frame.BackgroundTransparency = 1
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 3
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 4)
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = frame
+
+	local buttons = {}
+	for index, entry in ipairs({{"Minimize", "−"}, {"Exit", "×"}}) do
+		local name, label = entry[1], entry[2]
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.Text = label
+		button.TextSize = 20
+		button.TextColor3 = ThemeEditor.white
+		button.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+		button.Size = UDim2.fromOffset(30, 30)
+		button.LayoutOrder = index
+		button.ZIndex = 3
+		button.BorderSizePixel = 0
+		button.Visible = not disabled or table.find(disabled, name) == nil
+		button.Parent = frame
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 7)
+		corner.Parent = button
+		ThemeEditor.motion(state, button, button, "action", true)
+		buttons[name] = button
+	end
+	return frame, buttons.Minimize, buttons.Exit
+end
+
+function ThemeEditor.swatches(parent, palette)
+	local strip = ThemeEditor.frame(parent, "PalettePreview", 4)
+	strip.Size = UDim2.fromOffset(42, 16)
+	strip.BackgroundColor3 = palette.sidebar
+	for index, color in ipairs({palette.header, palette.accent, palette.accentEnd}) do
+		local chip = ThemeEditor.frame(strip, "Swatch", 3)
+		chip.Position = UDim2.fromOffset(2 + (index - 1) * 13, 2)
+		chip.Size = UDim2.fromOffset(12, 12)
+		chip.BackgroundColor3 = color
+	end
+	local border = Instance.new("UIStroke")
+	border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	border.Color = palette.line
+	border.Parent = strip
+	return strip
 end
 
 function ThemeEditor.setControlGlow(state, enabled)
@@ -593,13 +1586,25 @@ function ThemeEditor.setControlGlow(state, enabled)
 end
 
 function ThemeEditor.bind(state, object, kind)
+	local previous = object:GetAttribute("LixHubThemeRole")
+	object:SetAttribute("LixHubThemeRole", kind)
 	state.styles[object] = kind
 	ThemeEditor.style(state, object, kind)
+	if previous ~= kind and kind == "field" and object:IsA("TextBox") then
+		local function refresh()
+			ThemeEditor.style(state, object, kind, true)
+		end
+		object.Focused:Connect(refresh)
+		object.FocusLost:Connect(refresh)
+	end
 end
 
 function ThemeEditor.trackText(state, object)
 	if state.styles[object] then return end
-	if (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox"))
+	local kind = object:GetAttribute("LixHubThemeRole")
+	if kind then
+		ThemeEditor.bind(state, object, kind)
+	elseif (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox"))
 		and object.TextColor3 == ThemeEditor.white then
 		ThemeEditor.bind(state, object, "text")
 	end
@@ -607,42 +1612,77 @@ end
 
 function ThemeEditor.apply(state, theme, report)
 	state.theme = theme
+	state.palette = ThemeEditor.palette(theme)
 	for object, kind in pairs(state.styles) do
 		if object.Parent then ThemeEditor.style(state, object, kind) end
 	end
-	if theme.text or theme.accent then
-		for _, object in ipairs(state.base:GetDescendants()) do
-			ThemeEditor.trackText(state, object)
-		end
-	end
-	ThemeEditor.applyWallpaper(state, theme.wallpaper, theme.wallpaperDim, report)
+	state.backdropTheme = ThemeEditor.makeDraft(theme)
+	ThemeEditor.applyWallpaper(state, theme.wallpaper, report)
+	ThemeEditor.applyIcon(state, theme.icon)
+	ThemeEditor.updateBackdrop(state)
 end
 
-function ThemeEditor.create(base, theme)
-	local wallpaper = Instance.new("ImageLabel")
-	wallpaper.Name = "Wallpaper"
-	wallpaper.Size = UDim2.fromScale(1, 1)
-	wallpaper.ScaleType = Enum.ScaleType.Crop
-	wallpaper.BackgroundTransparency = 1
-	wallpaper.ZIndex = 0
-	wallpaper.Visible = false
-	wallpaper.Parent = base
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = wallpaper
+function ThemeEditor.create(base, theme, root)
+	local wallpaper, pattern = ThemeEditor.backdrop(base, 9)
+	root = root or base
+	local weatherLayer = Instance.new("Frame")
+	weatherLayer.Name = "WeatherLayer"
+	weatherLayer.BackgroundTransparency = 1
+	weatherLayer.BorderSizePixel = 0
+	weatherLayer.Position = UDim2.fromOffset(9, 0)
+	weatherLayer.Size = UDim2.new(1, -18, 1, 0)
+	weatherLayer.ClipsDescendants = true
+	weatherLayer.Visible = false
+	weatherLayer.ZIndex = 0
+	weatherLayer.Parent = pattern.Parent
 
 	local state = {
 		base = base,
 		theme = theme,
 		wallpaper = wallpaper,
+		pattern = pattern,
+		weather = {
+			layer = weatherLayer,
+			screen = root:IsA("ScreenGui") and root or nil,
+			request = 0,
+			pool = {},
+		},
+		palette = ThemeEditor.palette(theme),
 		wallpaperRequest = 0,
+		iconRequest = 0,
 		custom = {},
-		styles = setmetatable({}, {__mode = "k"}),
+		overlayPositions = {},
+		styles = {},
+		hovered = setmetatable({}, {__mode = "k"}),
+		transitions = setmetatable({}, {__mode = "kv"}),
 	}
-	base.DescendantAdded:Connect(function(object)
-		if state.theme.text or state.theme.accent then ThemeEditor.trackText(state, object) end
+	root.DescendantAdded:Connect(function(object)
+		ThemeEditor.trackText(state, object)
 	end)
+	root.DescendantRemoving:Connect(function(object)
+		state.styles[object] = nil
+		state.hovered[object] = nil
+		local transition = state.transitions[object]
+		if transition then transition:Cancel() end
+		state.transitions[object] = nil
+	end)
+	local function updateWeather()
+		ThemeEditor.updateWeatherAnimation(state)
+	end
+	base:GetPropertyChangedSignal("Visible"):Connect(updateWeather)
+	if state.weather.screen then
+		state.weather.screen:GetPropertyChangedSignal("Enabled"):Connect(updateWeather)
+	end
+	base.Destroying:Connect(function()
+		state.weather.disposed = true
+		if state.weather.render then
+			state.weather.render:Disconnect()
+			state.weather.render = nil
+		end
+	end)
+	ThemeEditor.updateBackdrop(state, ThemeEditor.makeDraft(theme))
+	ThemeEditor.applyWallpaper(state, theme.wallpaper)
+	ThemeEditor.applyIcon(state, theme.icon)
 	return state
 end
 
@@ -658,15 +1698,39 @@ function ThemeEditor.refreshOptions(state)
 	dropdown:InsertOptions(options)
 end
 
+function ThemeEditor.remember(state, window, save, debounce)
+	state.draftEdited = true
+	if state.draftSave then
+		task.cancel(state.draftSave)
+		state.draftSave = nil
+	end
+	local function persist()
+		state.draftSave = nil
+		if not save() and not state.themeSaveWarning then
+			state.themeSaveWarning = true
+			window:Notify({Title = "Themes", Description = "Could not save this appearance to the device.", Duration = 4})
+		end
+	end
+	if debounce then
+		state.draftSave = task.delay(0.3, persist)
+	else
+		persist()
+	end
+end
+
 function ThemeEditor.build(section, state, window, save)
 	local function notify(message)
 		window:Notify({Title = "Themes", Description = message, Duration = 4})
+	end
+	local function remember(debounce)
+		ThemeEditor.remember(state, window, save, debounce)
 	end
 	local name = section:Input({Name = "Theme Name", Placeholder = "Name", CharacterLimit = 24})
 	local pickers = {}
 	local function preview()
 		local theme = ThemeEditor.preview(state.draft)
 		theme.wallpaper = state.pendingWallpaper or theme.wallpaper
+		theme.icon = state.pendingIcon or theme.icon
 		window:SetTheme(theme)
 	end
 	for _, field in ipairs(ThemeEditor.colors) do
@@ -677,30 +1741,60 @@ function ThemeEditor.build(section, state, window, save)
 			Callback = function(color)
 				state.draft[key] = color
 				preview()
+				remember(true)
 			end,
 		})
 	end
-	local wallpaper = section:Input({Name = "Wallpaper", Placeholder = "Image URL or asset ID", CharacterLimit = 2048})
-	local dim = section:Slider({
-		Name = "Wallpaper Dim",
-		Default = state.draft.wallpaperDim,
-		Minimum = 0,
-		Maximum = 1,
-		Precision = 2,
-		Callback = function(value)
-			state.draft.wallpaperDim = value
-			state.wallpaper.ImageTransparency = value
+	local gradients = section:Toggle({
+		Name = "Color Blends",
+		Default = state.draft.gradients,
+		Callback = function(enabled)
+			if state.draft.gradients == enabled then return end
+			state.draft.gradients = enabled
+			preview()
+			remember(false)
 		end,
 	})
+	local wallpaper = section:Input({Name = "Wallpaper", Placeholder = "Roblox image or decal ID", CharacterLimit = 2048})
+	local adjustments = {}
+	local function slider(field)
+		local key = field.key
+		adjustments[key] = section:Slider({
+			Name = field.label,
+			Default = state.draft[key],
+			Minimum = field.min,
+			Maximum = field.max,
+			Precision = 2,
+			Callback = function(value)
+				state.draft[key] = value
+				ThemeEditor.updateBackdrop(state, state.draft)
+				remember(true)
+			end,
+		})
+	end
+	for _, field in ipairs(ThemeEditor.adjustments) do
+		if not field.weather and field.key ~= "patternStrength" then slider(field) end
+	end
+	section:Button({Name = "Reset Framing", Callback = function()
+		state.draft.wallpaperZoom = 1
+		state.draft.wallpaperX = 0
+		state.draft.wallpaperY = 0
+		adjustments.wallpaperZoom:UpdateValue(1)
+		adjustments.wallpaperX:UpdateValue(0)
+		adjustments.wallpaperY:UpdateValue(0)
+		ThemeEditor.updateBackdrop(state, state.draft)
+		remember(false)
+	end})
 	section:Button({Name = "Apply Wallpaper", Callback = function()
-		local source = ThemeEditor.cleanWallpaper(wallpaper:GetInput())
+		local source = ThemeEditor.imageAsset(wallpaper:GetInput())
 		if not source then
-			notify("Enter a direct image link or a Roblox asset ID.")
+			notify("Enter a Roblox image or decal ID or link.")
 			return
 		end
 		state.pendingWallpaper = source
 		local theme = ThemeEditor.preview(state.draft)
 		theme.wallpaper = source
+		theme.icon = state.pendingIcon or theme.icon
 		window:SetTheme(theme, function(message)
 			if state.pendingWallpaper ~= source then return end
 			state.pendingWallpaper = nil
@@ -709,6 +1803,7 @@ function ThemeEditor.build(section, state, window, save)
 				notify(message)
 			else
 				state.draft.wallpaper = source
+				remember(false)
 			end
 		end)
 	end})
@@ -717,10 +1812,51 @@ function ThemeEditor.build(section, state, window, save)
 		state.pendingWallpaper = nil
 		state.draft.wallpaper = nil
 		preview()
+		remember(false)
+	end})
+	local pattern = section:Dropdown({
+		Name = "Pattern",
+		Options = table.clone(ThemeEditor.patterns),
+		Default = table.find(ThemeEditor.patterns, state.draft.pattern),
+		Required = true,
+		Callback = function(value)
+			if not value or state.draft.pattern == value then return end
+			state.draft.pattern = value
+			ThemeEditor.updateBackdrop(state, state.draft)
+			remember(false)
+		end,
+	})
+	slider(ThemeEditor.adjustments[#ThemeEditor.adjustments])
+	local icon = section:Input({Name = "Hub Icon", Placeholder = "Roblox image or decal ID", CharacterLimit = 2048})
+	section:Button({Name = "Apply Hub Icon", Callback = function()
+		local source = ThemeEditor.imageAsset(icon:GetInput())
+		if not source then
+			notify("Enter a Roblox image or decal ID or link.")
+			return
+		end
+		state.pendingIcon = source
+		ThemeEditor.applyIcon(state, source, function(message)
+			if state.pendingIcon ~= source then return end
+			state.pendingIcon = nil
+			if message then
+				preview()
+				notify(message)
+			else
+				state.draft.icon = source
+				remember(false)
+			end
+		end)
+	end})
+	section:Button({Name = "Reset Hub Icon", Callback = function()
+		state.pendingIcon = nil
+		state.draft.icon = nil
+		icon:UpdateText("")
+		ThemeEditor.applyIcon(state, nil)
+		remember(false)
 	end})
 	section:Button({Name = "Save Theme", Callback = function()
-		if state.pendingWallpaper then
-			notify("Wait for the wallpaper to load.")
+		if state.pendingWallpaper or state.pendingIcon or state.pendingWeatherIcon then
+			notify("Wait for the theme images to load.")
 			return
 		end
 		local selected = ThemeEditor.cleanName(name:GetInput())
@@ -759,12 +1895,103 @@ function ThemeEditor.build(section, state, window, save)
 	state.refreshEditor = function()
 		name:UpdateText(state.custom[state.selected] and state.selected or "")
 		wallpaper:UpdateText(state.draft.wallpaper or "")
-		dim:UpdateValue(state.draft.wallpaperDim)
+		icon:UpdateText(state.draft.icon or "")
+		for key, adjustment in pairs(adjustments) do
+			adjustment:UpdateValue(state.draft[key])
+		end
+		pattern:UpdateSelection(state.draft.pattern)
+		if gradients:GetState() ~= state.draft.gradients then gradients:UpdateState(state.draft.gradients) end
 		for key, picker in pairs(pickers) do
 			picker:SetColor(state.draft[key], true)
 		end
 	end
 	state.refreshEditor()
+end
+
+function ThemeEditor.buildWeather(section, state, window, save)
+	local function notify(message)
+		window:Notify({Title = "Weather", Description = message, Duration = 4})
+	end
+	local function apply(debounce)
+		ThemeEditor.updateBackdrop(state, state.draft)
+		ThemeEditor.remember(state, window, save, debounce)
+	end
+
+	local custom = {}
+	local function showCustom(mode)
+		for _, control in ipairs(custom) do control:SetVisibility(mode == "Custom") end
+	end
+
+	local mode = section:Dropdown({
+		Name = "Effect",
+		Options = table.clone(ThemeEditor.weatherModes),
+		Default = table.find(ThemeEditor.weatherModes, state.draft.weatherMode),
+		Required = true,
+		Callback = function(value)
+			showCustom(value)
+			if not value or state.draft.weatherMode == value then return end
+			state.pendingWeatherIcon = nil
+			state.draft.weatherMode = value
+			apply(false)
+		end,
+	})
+
+	local sliders = {}
+	for _, field in ipairs(ThemeEditor.adjustments) do
+		if field.weather then
+			local key = field.key
+			sliders[key] = section:Slider({
+				Name = field.label,
+				Minimum = field.min,
+				Maximum = field.max,
+				Default = state.draft[key],
+				DisplayMethod = "Round",
+				Precision = 0,
+				Callback = function(value)
+					state.draft[key] = math.round(value)
+					apply(true)
+				end,
+			})
+		end
+	end
+
+	local icon = section:Input({Name = "Weather Icon", Placeholder = "Roblox image or decal ID", CharacterLimit = 2048})
+	custom[1] = icon
+	custom[2] = section:Button({Name = "Apply Weather Icon", Callback = function()
+		local source = ThemeEditor.imageAsset(icon:GetInput())
+		if not source then
+			notify("Enter a Roblox image or decal ID or link.")
+			return
+		end
+		state.pendingWeatherIcon = source
+		ThemeEditor.applyWeatherIcon(state, source, function(message)
+			if state.pendingWeatherIcon ~= source then return end
+			state.pendingWeatherIcon = nil
+			if message then
+				ThemeEditor.updateBackdrop(state, state.draft)
+				notify(message)
+			else
+				state.draft.weatherIcon = source
+				apply(false)
+			end
+		end)
+		ThemeEditor.updateWeatherAnimation(state)
+	end})
+	custom[3] = section:Button({Name = "Clear Weather Icon", Callback = function()
+		state.pendingWeatherIcon = nil
+		state.draft.weatherIcon = nil
+		icon:UpdateText("")
+		apply(false)
+	end})
+
+	state.refreshWeather = function()
+		mode:UpdateSelection(state.draft.weatherMode)
+		icon:UpdateText(state.draft.weatherIcon or "")
+		for key, slider in pairs(sliders) do
+			slider:UpdateValue(state.draft[key])
+		end
+	end
+	state.refreshWeather()
 end
 
 function MacLib:Window(Settings)
@@ -928,12 +2155,13 @@ end]]
 	notificationsUIPadding.PaddingTop = UDim.new(0, 10)
 	notificationsUIPadding.Parent = notifications
 
-	local base = Instance.new("CanvasGroup")
+	local base = Instance.new("Frame")
 	base.Name = "Base"
 	base.Active = true
+	base.ClipsDescendants = true
 	base.AnchorPoint = Vector2.new(0.5, 0.5)
 	base.BackgroundColor3 = theme.base
-	base.BackgroundTransparency = Settings.AcrylicBlur and theme.baseTrans or 0
+	base.BackgroundTransparency = ThemeEditor.windowTransparency(theme, acrylicBlur)
 	base.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	base.BorderSizePixel = 0
 	base.Position = UDim2.fromScale(0.5, 0.5)
@@ -945,16 +2173,7 @@ end]]
 	baseUIScale.Parent = base
 	local _manualScale = false
 	local _viewportConnection = nil
-	local compactBar = nil
 	local compactGui = nil
-	local _loadedCompactPosition = nil
-	local _compactFPSConnection = nil
-	local _compactInputConnection = nil
-	local updateCompactLayout = nil
-	local clampCompactBar = nil
-	local compactScale = nil
-	local _stateAnimationId = 0
-	local _compactBlurCleanup = nil
 
 	local function getViewportSize()
 		local camera = Workspace and Workspace.CurrentCamera
@@ -983,7 +2202,7 @@ end]]
 		local height = (_windowBaseSize.Y.Offset > 0 and _windowBaseSize.Y.Offset or 560) * _appliedScale
 		local halfWidth, halfHeight = width / 2, height / 2
 		local margin = 8
-		local currentCenter = base.AbsolutePosition + base.AbsoluteSize / 2
+		local currentCenter = base.AbsolutePosition - macLib.AbsolutePosition + base.AbsoluteSize / 2
 		if currentCenter.X == 0 and currentCenter.Y == 0 then
 			currentCenter = viewport / 2
 		end
@@ -1003,7 +2222,7 @@ end]]
 
 	local baseUICorner = Instance.new("UICorner")
 	baseUICorner.Name = "BaseUICorner"
-	baseUICorner.CornerRadius = UDim.new(0, 10)
+	baseUICorner.CornerRadius = UDim.new(0, 14)
 	baseUICorner.Parent = base
 
 	local baseUIStroke = Instance.new("UIStroke")
@@ -1016,19 +2235,17 @@ end]]
 	local baseGradientFrame = Instance.new("Frame")
 	baseGradientFrame.Name = "BaseGradientFrame"
 	baseGradientFrame.Size = UDim2.fromScale(1, 1)
-	baseGradientFrame.BackgroundColor3 = theme.stroke
-	baseGradientFrame.BackgroundTransparency = 1
 	baseGradientFrame.BorderSizePixel = 0
 	baseGradientFrame.ZIndex = 0
 	baseGradientFrame.Parent = base
 
 	local baseGradientCorner = Instance.new("UICorner")
-	baseGradientCorner.CornerRadius = UDim.new(0, 10)
+	baseGradientCorner.CornerRadius = UDim.new(0, 14)
 	baseGradientCorner.Parent = baseGradientFrame
 
 	local baseGradient = Instance.new("UIGradient")
 	baseGradient.Name = "BaseGradient"
-	baseGradient.Rotation = 135
+	baseGradient.Rotation = 38
 	baseGradient.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0,    theme.gradientStart or 0.72),
 		NumberSequenceKeypoint.new(0.50, 1),
@@ -1036,7 +2253,9 @@ end]]
 	})
 	baseGradient.Parent = baseGradientFrame
 
-	local appearance = ThemeEditor.create(base, theme)
+	local appearance = ThemeEditor.create(base, theme, macLib)
+	appearance.acrylic = acrylicBlur == true
+	ThemeEditor.bind(appearance, baseGradientFrame, "windowWash")
 	local sidebar = Instance.new("Frame")
 	sidebar.Name = "Sidebar"
 	sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -1044,7 +2263,13 @@ end]]
 	sidebar.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	sidebar.BorderSizePixel = 0
 	sidebar.Position = UDim2.fromScale(-3.52e-08, 4.69e-08)
-	sidebar.Size = UDim2.fromScale(0.325, 1)
+	sidebar.Size = UDim2.fromScale(0.26, 1)
+	ThemeEditor.bind(appearance, sidebar, "sidebar")
+	do
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = baseUICorner.CornerRadius
+		corner.Parent = sidebar
+	end
 
 	local divider = Instance.new("Frame")
 	divider.Name = "Divider"
@@ -1072,151 +2297,7 @@ end]]
 	dividerInteract.TextSize = 14
 	dividerInteract.Parent = divider
 
-	local windowControls = Instance.new("Frame")
-	windowControls.Name = "WindowControls"
-	windowControls.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	windowControls.BackgroundTransparency = 1
-	windowControls.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	windowControls.BorderSizePixel = 0
-	windowControls.Size = UDim2.new(1, 0, 0, 31)
-
-	local controls = Instance.new("Frame")
-	controls.Name = "Controls"
-	controls.BackgroundColor3 = Color3.fromRGB(119, 174, 94)
-	controls.BackgroundTransparency = 1
-	controls.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	controls.BorderSizePixel = 0
-	controls.Size = UDim2.fromScale(1, 1)
-
-	local uIListLayout = Instance.new("UIListLayout")
-	uIListLayout.Name = "UIListLayout"
-	uIListLayout.Padding = UDim.new(0, 5)
-	uIListLayout.FillDirection = Enum.FillDirection.Horizontal
-	uIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	uIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	uIListLayout.Parent = controls
-
-	local uIPadding = Instance.new("UIPadding")
-	uIPadding.Name = "UIPadding"
-	uIPadding.PaddingLeft = UDim.new(0, 11)
-	uIPadding.Parent = controls
-
-	local windowControlSettings = {
-		sizes = { enabled = UDim2.fromOffset(10, 10), disabled = UDim2.fromOffset(9, 9) },
-		transparencies = { enabled = 0, disabled = 1 },
-		strokeTransparency = 0.9,
-	}
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Name = "BaseUIStroke"
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Color3.fromRGB(255, 255, 255)
-	stroke.Transparency = windowControlSettings.strokeTransparency
-
-	local exit = Instance.new("TextButton")
-	exit.Name = "Exit"
-	exit.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-	exit.Text = "×"
-	exit.TextColor3 = Color3.fromRGB(255, 255, 255)
-	exit.TextSize = 9
-	exit.AutoButtonColor = false
-	exit.BackgroundColor3 = Color3.fromRGB(250, 93, 86)
-	exit.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	exit.BorderSizePixel = 0
-
-	local uICorner = Instance.new("UICorner")
-	uICorner.Name = "UICorner"
-	uICorner.CornerRadius = UDim.new(1, 0)
-	uICorner.Parent = exit
-
-	exit.Parent = controls
-
-	local minimize = Instance.new("TextButton")
-	minimize.Name = "Minimize"
-	minimize.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-	minimize.Text = "−"
-	minimize.TextColor3 = Color3.fromRGB(255, 255, 255)
-	minimize.TextSize = 9
-	minimize.AutoButtonColor = false
-	minimize.BackgroundColor3 = Color3.fromRGB(252, 190, 57)
-	minimize.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	minimize.BorderSizePixel = 0
-	minimize.LayoutOrder = 1
-
-	local uICorner1 = Instance.new("UICorner")
-	uICorner1.Name = "UICorner"
-	uICorner1.CornerRadius = UDim.new(1, 0)
-	uICorner1.Parent = minimize
-
-	minimize.Parent = controls
-
-	local maximize = Instance.new("TextButton")
-	maximize.Name = "Maximize"
-	maximize.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
-	maximize.Text = ""
-	maximize.TextColor3 = Color3.fromRGB(0, 0, 0)
-	maximize.TextSize = 14
-	maximize.AutoButtonColor = false
-	maximize.BackgroundColor3 = Color3.fromRGB(119, 174, 94)
-	maximize.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	maximize.BorderSizePixel = 0
-	maximize.LayoutOrder = 1
-
-	local uICorner2 = Instance.new("UICorner")
-	uICorner2.Name = "UICorner"
-	uICorner2.CornerRadius = UDim.new(1, 0)
-	uICorner2.Parent = maximize
-
-	maximize.Parent = controls
-
-	local function applyState(button, enabled)
-		local size = enabled and windowControlSettings.sizes.enabled or windowControlSettings.sizes.disabled
-		local transparency = enabled and windowControlSettings.transparencies.enabled or windowControlSettings.transparencies.disabled
-
-		button.Size = size
-		button.BackgroundTransparency = transparency
-		button.TextTransparency = transparency
-		button.Active = enabled
-		button.Interactable = enabled
-
-		for _, child in ipairs(button:GetChildren()) do
-			if child:IsA("UIStroke") then
-				child.Transparency = transparency
-			end
-		end
-		if not enabled then
-			stroke:Clone().Parent = button
-		end
-	end
-
-	applyState(maximize, false)
-
-	local controlsList = {exit, minimize}
-	for _, button in pairs(controlsList) do
-		local buttonName = button.Name
-		local isEnabled = true
-
-		if Settings.DisabledWindowControls and table.find(Settings.DisabledWindowControls, buttonName) then
-			isEnabled = false
-		end
-
-		applyState(button, isEnabled)
-	end
-
-	controls.Parent = windowControls
-
-	local divider1 = Instance.new("Frame")
-	divider1.Name = "Divider"
-	divider1.AnchorPoint = Vector2.new(0, 1)
-	divider1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	divider1.BackgroundTransparency = 0.9
-	divider1.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	divider1.BorderSizePixel = 0
-	divider1.Position = UDim2.fromScale(0, 1)
-	divider1.Size = UDim2.new(1, 0, 0, 1)
-	divider1.Parent = windowControls
-
-	windowControls.Parent = sidebar
+	local windowControls, minimize, exit = ThemeEditor.windowControls(appearance, Settings.DisabledWindowControls)
 
 	local information = Instance.new("Frame")
 	information.Name = "Information"
@@ -1224,19 +2305,19 @@ end]]
 	information.BackgroundTransparency = 1
 	information.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	information.BorderSizePixel = 0
-	information.Position = UDim2.fromOffset(0, 31)
-	information.Size = UDim2.new(1, 0, 0, 62)
+	information.Position = UDim2.fromOffset(0, 0)
+	information.Size = UDim2.new(1, 0, 0, 63)
 
 	local divider2 = Instance.new("Frame")
 	divider2.Name = "Divider"
 	divider2.AnchorPoint = Vector2.new(0, 1)
-	divider2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	divider2.BackgroundTransparency = 0.9
+	divider2.BackgroundTransparency = 0.42
 	divider2.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	divider2.BorderSizePixel = 0
 	divider2.Position = UDim2.fromScale(0, 1)
 	divider2.Size = UDim2.new(1, 0, 0, 1)
 	divider2.Parent = information
+	ThemeEditor.bind(appearance, divider2, "line")
 
 	local informationHolder = Instance.new("Frame")
 	informationHolder.Name = "InformationHolder"
@@ -1244,14 +2325,19 @@ end]]
 	informationHolder.BackgroundTransparency = 1
 	informationHolder.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	informationHolder.BorderSizePixel = 0
-	informationHolder.Size = UDim2.fromScale(1, 1)
+	informationHolder.Position = UDim2.fromOffset(8, 6)
+	informationHolder.Size = UDim2.new(1, -16, 1, -13)
+	ThemeEditor.bind(appearance, informationHolder, "panel")
+	do
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 10)
+		corner.Parent = informationHolder
+	end
 
 	local informationHolderUIPadding = Instance.new("UIPadding")
 	informationHolderUIPadding.Name = "InformationHolderUIPadding"
-	informationHolderUIPadding.PaddingLeft = UDim.new(0, 14)
-	informationHolderUIPadding.PaddingRight = UDim.new(0, 14)
-	informationHolderUIPadding.PaddingTop = UDim.new(0, 10)
-	informationHolderUIPadding.PaddingBottom = UDim.new(0, 10)
+	informationHolderUIPadding.PaddingLeft = UDim.new(0, 7)
+	informationHolderUIPadding.PaddingRight = UDim.new(0, 5)
 	informationHolderUIPadding.Parent = informationHolder
 
 	local headerRow = Instance.new("Frame")
@@ -1263,7 +2349,7 @@ end]]
 	local headerRowLayout = Instance.new("UIListLayout")
 	headerRowLayout.FillDirection = Enum.FillDirection.Horizontal
 	headerRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	headerRowLayout.Padding = UDim.new(0, 10)
+	headerRowLayout.Padding = UDim.new(0, 8)
 	headerRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	headerRowLayout.Parent = headerRow
 
@@ -1274,8 +2360,10 @@ end]]
 	lixLogo.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	lixLogo.BackgroundTransparency = 1
 	lixLogo.BorderSizePixel = 0
-	lixLogo.Size = UDim2.fromOffset(36, 36)
-	lixLogo.Image = "rbxassetid://139436994731049"
+	lixLogo.Size = UDim2.fromOffset(41, 41)
+	lixLogo.Image = appearance.iconAsset or ThemeEditor.defaultIcon
+	lixLogo.ScaleType = Enum.ScaleType.Crop
+	appearance.headerIcon = lixLogo
 	lixLogo.LayoutOrder = 0
 
 	local lixLogoCorner = Instance.new("UICorner")
@@ -1284,9 +2372,10 @@ end]]
 
 	local lixLogoStroke = Instance.new("UIStroke")
 	lixLogoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	lixLogoStroke.Color = Color3.fromRGB(255, 255, 255)
-	lixLogoStroke.Transparency = 0.85
+	lixLogoStroke.Thickness = 1.5
+	lixLogoStroke.Transparency = 0.16
 	lixLogoStroke.Parent = lixLogo
+	ThemeEditor.bind(appearance, lixLogoStroke, "brandRing")
 
 	lixLogo.Parent = headerRow
 
@@ -1295,11 +2384,11 @@ end]]
 	headerTextStack.BackgroundTransparency = 1
 	headerTextStack.BorderSizePixel = 0
 	headerTextStack.LayoutOrder = 1
-	headerTextStack.Size = UDim2.new(1, -46, 0, 0)
+	headerTextStack.Size = UDim2.new(1, -49, 0, 0)
 	headerTextStack.AutomaticSize = Enum.AutomaticSize.Y
 
 	local headerTextLayout = Instance.new("UIListLayout")
-	headerTextLayout.Padding = UDim.new(0, 4)
+	headerTextLayout.Padding = UDim.new(0, 1)
 	headerTextLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	headerTextLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	headerTextLayout.Parent = headerTextStack
@@ -1307,12 +2396,11 @@ end]]
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-	title.Text = Settings.Title
+	title.Text = "LixHub"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.RichText = true
-	title.TextSize = 20
+	title.TextSize = 19
 	title.TextTransparency = 0.05
-	title.TextTruncate = Enum.TextTruncate.SplitWord
+	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextYAlignment = Enum.TextYAlignment.Top
 	title.AutomaticSize = Enum.AutomaticSize.Y
@@ -1322,23 +2410,20 @@ end]]
 	title.Size = UDim2.new(1, 0, 0, 0)
 	title.Parent = headerTextStack
 
-	local keyTimerLabel = Instance.new("TextLabel")
-	keyTimerLabel.Name = "KeyTimerLabel"
-	keyTimerLabel.FontFace = Font.new(assets.interFont, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-	keyTimerLabel.Text = "[FREE]"
-	keyTimerLabel.TextColor3 = Color3.fromRGB(0, 210, 100)
-	keyTimerLabel.TextSize = 12
-	keyTimerLabel.TextTransparency = 0.1
-	keyTimerLabel.TextTruncate = Enum.TextTruncate.SplitWord
-	keyTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
-	keyTimerLabel.TextYAlignment = Enum.TextYAlignment.Top
-	keyTimerLabel.AutomaticSize = Enum.AutomaticSize.Y
-	keyTimerLabel.BackgroundTransparency = 1
-	keyTimerLabel.BorderSizePixel = 0
-	keyTimerLabel.LayoutOrder = 1
-	keyTimerLabel.Visible = true
-	keyTimerLabel.Size = UDim2.new(1, 0, 0, 0)
-	keyTimerLabel.Parent = headerTextStack
+	local gameTitle = Instance.new("TextLabel")
+	gameTitle.Name = "GameTitle"
+	gameTitle.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+	gameTitle.Text = Settings.Title or ""
+	gameTitle.TextColor3 = ThemeEditor.white
+	gameTitle.TextSize = 12
+	gameTitle.TextTransparency = 0.28
+	gameTitle.TextTruncate = Enum.TextTruncate.AtEnd
+	gameTitle.TextXAlignment = Enum.TextXAlignment.Left
+	gameTitle.BackgroundTransparency = 1
+	gameTitle.LayoutOrder = 1
+	gameTitle.Size = UDim2.new(1, 0, 0, 15)
+	gameTitle.Visible = gameTitle.Text ~= ""
+	gameTitle.Parent = headerTextStack
 
 	headerTextStack.Parent = headerRow
 	headerRow.Parent = informationHolder
@@ -1351,8 +2436,8 @@ end]]
 	sidebarGroup.BackgroundTransparency = 1
 	sidebarGroup.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	sidebarGroup.BorderSizePixel = 0
-	sidebarGroup.Position = UDim2.fromOffset(0, 93)
-	sidebarGroup.Size = UDim2.new(1, 0, 1, -93)
+	sidebarGroup.Position = UDim2.fromOffset(0, 63)
+	sidebarGroup.Size = UDim2.new(1, 0, 1, -63)
 
 	local sidebarGroupUIPadding = Instance.new("UIPadding")
 	sidebarGroupUIPadding.Name = "SidebarGroupUIPadding"
@@ -1398,122 +2483,9 @@ end]]
 	tabSwitchersScrollingFrame.Parent = tabSwitchers
 	tabSwitchers.Parent = sidebarGroup
 
-	local DISCORD_INVITE = "https://discord.gg/6wEFzDAeYn"
+	ThemeEditor.addDiscordFooter(appearance, sidebarGroup)
 
-	local discordFooter = Instance.new("Frame")
-	discordFooter.Name = "DiscordFooter"
-	discordFooter.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	discordFooter.BackgroundTransparency = 1
-	discordFooter.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	discordFooter.BorderSizePixel = 0
-	discordFooter.AnchorPoint = Vector2.new(0, 1)
-	discordFooter.Position = UDim2.new(0, 0, 1, 0)
-	discordFooter.Size = UDim2.new(1, 0, 0, 46)
-	discordFooter.Parent = sidebarGroup
-
-	local discordFooterLayout = Instance.new("UIListLayout")
-	discordFooterLayout.Name = "DiscordFooterLayout"
-	discordFooterLayout.FillDirection = Enum.FillDirection.Horizontal
-	discordFooterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	discordFooterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-	discordFooterLayout.Padding = UDim.new(0, 10)
-	discordFooterLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	discordFooterLayout.Parent = discordFooter
-
-	local discordFooterPadding = Instance.new("UIPadding")
-	discordFooterPadding.Name = "DiscordFooterPadding"
-	discordFooterPadding.PaddingLeft = UDim.new(0, 12)
-	discordFooterPadding.Parent = discordFooter
-
-	local discordCircle = Instance.new("Frame")
-	discordCircle.Name = "DiscordCircle"
-	discordCircle.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-	discordCircle.BackgroundTransparency = 0.25
-	discordCircle.BorderSizePixel = 0
-	discordCircle.Size = UDim2.fromOffset(34, 34)
-	discordCircle.LayoutOrder = 0
-	discordCircle.Parent = discordFooter
-
-	local discordCircleCorner = Instance.new("UICorner")
-	discordCircleCorner.CornerRadius = UDim.new(1, 0)
-	discordCircleCorner.Parent = discordCircle
-
-	local discordBtn = Instance.new("ImageButton")
-	discordBtn.Name = "DiscordBtn"
-	discordBtn.Image = "rbxassetid://10367063073"
-	discordBtn.ImageTransparency = 0
-	discordBtn.ScaleType = Enum.ScaleType.Fit
-	discordBtn.BackgroundTransparency = 1
-	discordBtn.BorderSizePixel = 0
-	discordBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-	discordBtn.Position = UDim2.fromScale(0.5, 0.5)
-	discordBtn.Size = UDim2.fromOffset(20, 20)
-	discordBtn.AutoButtonColor = false
-	discordBtn.Parent = discordCircle
-
-	local discordLabel = Instance.new("TextButton")
-	discordLabel.Name = "DiscordLabel"
-	discordLabel.FontFace = Font.new(
-		assets.interFont,
-		Enum.FontWeight.Medium,
-		Enum.FontStyle.Normal
-	)
-	discordLabel.Text = "Copy discord link!"
-	discordLabel.RichText = false
-	discordLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	discordLabel.TextSize = 13
-	discordLabel.TextTransparency = 0.45
-	discordLabel.TextXAlignment = Enum.TextXAlignment.Left
-	discordLabel.TextYAlignment = Enum.TextYAlignment.Center
-	discordLabel.TextTruncate = Enum.TextTruncate.SplitWord
-	discordLabel.AutomaticSize = Enum.AutomaticSize.None
-	discordLabel.BackgroundTransparency = 1
-	discordLabel.BorderSizePixel = 0
-	discordLabel.AutoButtonColor = false
-	discordLabel.Size = UDim2.new(1, -58, 0, 34)
-	discordLabel.LayoutOrder = 1
-	discordLabel.Parent = discordFooter
-
-	local discordCopied = false
-	local function doCopy()
-		if discordCopied then return end
-		discordCopied = true
-		pcall(function()
-			if typeof(setclipboard) == "function" then
-				setclipboard(DISCORD_INVITE)
-			elseif typeof(toclipboard) == "function" then
-				toclipboard(DISCORD_INVITE)
-			end
-		end)
-		discordLabel.Text = "Copied!"
-		discordLabel.TextTransparency = 0
-		discordCircle.BackgroundTransparency = 0
-		task.delay(1.5, function()
-			discordLabel.Text = "Copy discord link!"
-			discordLabel.TextTransparency = 0.45
-			discordCircle.BackgroundTransparency = 0.25
-			discordCopied = false
-		end)
-	end
-
-	local function onHoverEnter()
-		Tween(discordCircle, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { BackgroundTransparency = 0 }):Play()
-		Tween(discordLabel, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { TextTransparency = 0.1 }):Play()
-	end
-	local function onHoverLeave()
-		if discordCopied then return end
-		Tween(discordCircle, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { BackgroundTransparency = 0.25 }):Play()
-		Tween(discordLabel, TweenInfo.new(0.15, Enum.EasingStyle.Sine), { TextTransparency = 0.45 }):Play()
-	end
-
-	discordBtn.MouseEnter:Connect(onHoverEnter)
-	discordBtn.MouseLeave:Connect(onHoverLeave)
-	discordLabel.MouseEnter:Connect(onHoverEnter)
-	discordLabel.MouseLeave:Connect(onHoverLeave)
-
-	discordBtn.MouseButton1Click:Connect(doCopy)
-	discordLabel.MouseButton1Click:Connect(doCopy)
-
+	local keyTimerInfoLabel
 	local settingsTabFunctions = nil
 	local content
 
@@ -1532,16 +2504,10 @@ end]]
 	content.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	content.BorderSizePixel = 0
 	content.Position = UDim2.fromScale(1, 4.69e-08)
-	content.Size = UDim2.fromScale(0.675, 1)
+	content.Size = UDim2.fromScale(0.74, 1)
 
 	local resizingContent = false
-	local _baseSize = _windowBaseSize
-	local _baseW = _baseSize.X.Offset > 0 and _baseSize.X.Offset or 740
-	local defaultSidebarWidth = math.floor(_baseW * 0.325)
 	local initialMouseX, initialSidebarWidth
-	local snapRange = 20
-	local minSidebarWidth = 107
-	local maxSidebarWidth = _baseW - minSidebarWidth
 
 	local TweenSettings = {
 		DefaultTransparency = 0.9,
@@ -1570,8 +2536,9 @@ end]]
 	end)
 
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 and resizingContent then
 			resizingContent = false
+			if appearance.sidebarRatio and appearance.persistUI then appearance.persistUI() end
 		end
 	end)
 
@@ -1581,18 +2548,16 @@ end]]
 				resizingContent = false
 				return
 			end
-			local mouseLocation = UserInputService:GetMouseLocation()
-			local deltaX = mouseLocation.X - initialMouseX
-			local newSidebarWidth = initialSidebarWidth + deltaX
+			local width = base.AbsoluteSize.X
+			if width <= 0 then return end
+			local delta = UserInputService:GetMouseLocation().X - initialMouseX
+			local fraction = (initialSidebarWidth + delta) / width
+			local ratio = math.abs(fraction - 0.26) < 0.02 and 0.26 or math.clamp(fraction, 0.20, 0.38)
+			if sidebar.Size.X.Scale == ratio then return end
+			appearance.sidebarRatio = ratio
 
-			if math.abs(newSidebarWidth - defaultSidebarWidth) < snapRange then
-				newSidebarWidth = defaultSidebarWidth
-			else
-				newSidebarWidth = math.clamp(newSidebarWidth, minSidebarWidth, maxSidebarWidth)
-			end
-
-			sidebar.Size = UDim2.new(0, newSidebarWidth, 1, 0)
-			content.Size = UDim2.new(0, base.AbsoluteSize.X - newSidebarWidth, 1, 0)
+			sidebar.Size = UDim2.fromScale(ratio, 1)
+			content.Size = UDim2.fromScale(1 - ratio, 1)
 		end
 	end)
 
@@ -1607,13 +2572,13 @@ end]]
 	local divider4 = Instance.new("Frame")
 	divider4.Name = "Divider"
 	divider4.AnchorPoint = Vector2.new(0, 1)
-	divider4.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	divider4.BackgroundTransparency = 0.9
+	divider4.BackgroundTransparency = 0.42
 	divider4.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	divider4.BorderSizePixel = 0
 	divider4.Position = UDim2.fromScale(0, 1)
 	divider4.Size = UDim2.new(1, 0, 0, 1)
 	divider4.Parent = topbar
+	ThemeEditor.bind(appearance, divider4, "line")
 
 	local elements = Instance.new("Frame")
 	elements.Name = "Elements"
@@ -1638,7 +2603,7 @@ end]]
 	moveIcon.BackgroundTransparency = 1
 	moveIcon.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	moveIcon.BorderSizePixel = 0
-	moveIcon.Position = UDim2.fromScale(1, 0.5)
+	moveIcon.Position = UDim2.new(1, -221, 0.5, 0)
 	moveIcon.Size = UDim2.fromOffset(15, 15)
 	moveIcon.Parent = elements
 	moveIcon.Visible = Settings.DragStyle == 1
@@ -1677,96 +2642,81 @@ end]]
 		ChangemoveIconState("Default")
 	end)
 
-	local dragging_ = false
-	local dragInput
-	local dragStart
-	local startPos
-
-	local function update(input)
-		if not input or not input.Position or not dragStart or not startPos then
-			dragging_ = false
-			return
+	do
+		local moveHandle = Settings.DragStyle == 1 and interact or base
+		local drag
+		local function contains(widget, point)
+			if not widget or not widget.Visible then return false end
+			local start = widget.AbsolutePosition
+			local size = widget.AbsoluteSize
+			return point.X >= start.X and point.X <= start.X + size.X
+				and point.Y >= start.Y and point.Y <= start.Y + size.Y
 		end
-		local delta = input.Position - dragStart
-		base.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
 
-	local function onDragStart(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			local ok, position, currentPosition = pcall(function()
-				return input.Position, base.Position
+		local function startDrag(input)
+			local kind = input.UserInputType
+			if drag or appearance.resizing or (kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch) then return end
+			local point = input.Position
+			if contains(appearance.resizeGrip, point) then return end
+			local touch = kind == Enum.UserInputType.Touch
+			if touch then
+				if not contains(topbar, point) and not contains(information, point) then return end
+				if contains(appearance.searchBox, point) or contains(windowControls, point) or contains(lixLogo, point) then return end
+			end
+
+			drag = {input = input, touch = touch, start = point, position = base.Position}
+		end
+
+		moveHandle.InputBegan:Connect(startDrag)
+		if moveHandle ~= base then
+			base.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.Touch then startDrag(input) end
 			end)
-			if not ok or not position or not currentPosition then return end
-			dragStart = position
-			startPos = currentPosition
-			dragging_ = true
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging_ = false
-				end
-			end)
 		end
-	end
-
-	local function onDragUpdate(input)
-		if dragging_ and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			dragInput = input
-		end
-	end
-
-	if Settings.DragStyle == 1 then
-		interact.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				onDragStart(input)
+		local moved = UserInputService.InputChanged:Connect(function(input)
+			if not drag or appearance.resizing or not base.Visible then return end
+			if drag.touch and input ~= drag.input then return end
+			if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+			local delta = input.Position - drag.start
+			if not drag.moved and delta.Magnitude < (drag.touch and 7 or 3) then return end
+			drag.moved = true
+			local start = drag.position
+			base.Position = UDim2.new(start.X.Scale, start.X.Offset + delta.X, start.Y.Scale, start.Y.Offset + delta.Y)
+		end)
+		local ended = UserInputService.InputEnded:Connect(function(input)
+			if not drag then return end
+			if drag.touch and input ~= drag.input then return end
+			if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+			local finished = drag
+			drag = nil
+			if finished.moved then
+				task.defer(function()
+					if not base.Parent then return end
+					if finished.touch then clampWindowToViewport() end
+					appearance.windowMoved = true
+					if appearance.persistUI then appearance.persistUI() end
+				end)
 			end
 		end)
-
-		interact.InputChanged:Connect(onDragUpdate)
-
-		UserInputService.InputChanged:Connect(function(input)
-			if input == dragInput and dragging_ then
-				update(input)
-			end
+		base:GetPropertyChangedSignal("Visible"):Connect(function()
+			if not base.Visible then drag = nil end
 		end)
-
-		interact.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				dragging_ = false
-			end
-		end)
-	else
-		base.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				onDragStart(input)
-			end
-		end)
-
-		base.InputChanged:Connect(onDragUpdate)
-
-		UserInputService.InputChanged:Connect(function(input)
-			if input == dragInput and dragging_ then
-				update(input)
-			end
-		end)
-
-		base.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				dragging_ = false
-			end
+		base.Destroying:Connect(function()
+			moved:Disconnect()
+			ended:Disconnect()
 		end)
 	end
 
 	local currentTab = Instance.new("TextLabel")
 	currentTab.Name = "CurrentTab"
-	currentTab.FontFace = Font.new(assets.interFont)
+	currentTab.FontFace = Font.new(assets.interFont, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 	currentTab.RichText = true
 	currentTab.Text = ""
 	currentTab.RichText = true
 	currentTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-	currentTab.TextSize = 15
-	currentTab.TextTransparency = 0.5
-	currentTab.TextTruncate = Enum.TextTruncate.SplitWord
+	currentTab.TextSize = 23
+	currentTab.TextTransparency = 0.04
+	currentTab.TextTruncate = Enum.TextTruncate.AtEnd
 	currentTab.TextXAlignment = Enum.TextXAlignment.Left
 	currentTab.TextYAlignment = Enum.TextYAlignment.Top
 	currentTab.AnchorPoint = Vector2.new(0, 0.5)
@@ -1776,7 +2726,7 @@ end]]
 	currentTab.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	currentTab.BorderSizePixel = 0
 	currentTab.Position = UDim2.fromScale(0, 0.5)
-	currentTab.Size = UDim2.fromScale(0.9, 0)
+	currentTab.Size = UDim2.new(1, Settings.DragStyle == 1 and -246 or -218, 0, 0)
 	currentTab.Parent = elements
 
 	local searchContainer = Instance.new("Frame")
@@ -1786,9 +2736,10 @@ end]]
 	searchContainer.BackgroundTransparency = 0.95
 	searchContainer.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	searchContainer.BorderSizePixel = 0
-	searchContainer.Position = UDim2.new(1, 0, 0.5, 0)
-	searchContainer.Size = UDim2.fromOffset(168, 28)
+	searchContainer.Position = UDim2.new(1, -68, 0.5, 0)
+	searchContainer.Size = UDim2.fromOffset(134, 32)
 	searchContainer.Parent = elements
+	appearance.searchBox = searchContainer
 
 	local searchContainerUICorner = Instance.new("UICorner")
 	searchContainerUICorner.CornerRadius = UDim.new(0, 8)
@@ -1799,6 +2750,7 @@ end]]
 	searchContainerUIStroke.Color = Color3.fromRGB(255, 255, 255)
 	searchContainerUIStroke.Transparency = 0.82
 	searchContainerUIStroke.Parent = searchContainer
+	ThemeEditor.bind(appearance, searchContainer, "field")
 
 	local searchIcon = Instance.new("ImageLabel")
 	searchIcon.Image = assets.searchIcon
@@ -1809,6 +2761,7 @@ end]]
 	searchIcon.Position = UDim2.new(0, 7, 0.5, 0)
 	searchIcon.Size = UDim2.fromOffset(13, 13)
 	searchIcon.Parent = searchContainer
+	ThemeEditor.bind(appearance, searchIcon, "icon")
 
 	local searchInput = Instance.new("TextBox")
 	searchInput.Name = "SearchInput"
@@ -1826,6 +2779,13 @@ end]]
 	searchInput.Position = UDim2.new(0, 27, 0.5, 0)
 	searchInput.Size = UDim2.new(1, -33, 1, 0)
 	searchInput.Parent = searchContainer
+	ThemeEditor.bind(appearance, searchInput, "text")
+	searchInput.Focused:Connect(function()
+		searchContainerUIStroke.Color = appearance.palette.accent
+	end)
+	searchInput.FocusLost:Connect(function()
+		searchContainerUIStroke.Color = appearance.palette.line
+	end)
 
 	local searchResults = Instance.new("Frame")
 	searchResults.Name = "SearchResults"
@@ -1833,7 +2793,7 @@ end]]
 	searchResults.BackgroundColor3 = theme.searchBg
 	searchResults.BackgroundTransparency = 0.02
 	searchResults.BorderSizePixel = 0
-	searchResults.Position = UDim2.new(1, 0, 0, 64)
+	searchResults.Position = UDim2.new(1, -88, 0, 64)
 	searchResults.Size = UDim2.fromOffset(215, 0)
 	searchResults.AutomaticSize = Enum.AutomaticSize.Y
 	searchResults.Visible = false
@@ -1850,6 +2810,7 @@ end]]
 	searchResultsUIStroke.Color = Color3.fromRGB(255, 255, 255)
 	searchResultsUIStroke.Transparency = 0.84
 	searchResultsUIStroke.Parent = searchResults
+	ThemeEditor.bind(appearance, searchResultsUIStroke, "line")
 
 	local searchResultsUIPadding = Instance.new("UIPadding")
 	searchResultsUIPadding.PaddingTop = UDim.new(0, 8)
@@ -2057,6 +3018,7 @@ end]]
 	elements.Parent = topbar
 
 	topbar.Parent = content
+	windowControls.Parent = topbar
 
 	content.Parent = base
 
@@ -2300,30 +3262,24 @@ end]]
 		return true
 	end
 
-	local compactAcrylicVisible = false
-
 	local function UpdateOrientation(fetchProps)
 		local liveCamera = workspace.CurrentCamera
 		if not liveCamera or not liveCamera.Parent then return end
 
 		if not IsVisible(frame) or not acrylicBlur or unloaded then
 			for _, pt in pairs(parts) do
-				pt.Parent = nil
-				if not compactAcrylicVisible then
-					DepthOfField.Enabled = false
-					DepthOfField.Parent = nil
-				end
+				if pt.Parent then pt.Parent = nil end
 			end
+			DepthOfField.Enabled = false
+			DepthOfField.Parent = nil
 			return
 		end
+		if frame.AbsoluteSize.X <= 0 or frame.AbsoluteSize.Y <= 0 then return end
 		if not DepthOfField.Parent then
 			DepthOfField.Parent = Lighting
 		end
-		DepthOfField.Enabled = true
-		local properties = {
-			Transparency = (appearance.acrylicTransparency ~= nil) and appearance.acrylicTransparency or theme.acrylicTrans;
-			BrickColor = BrickColor.new(theme.acrylicTint);
-		}
+		if not DepthOfField.Enabled then DepthOfField.Enabled = true end
+		local applyMaterial = fetchProps == true or not parts[1] or parts[1].Parent ~= liveCamera
 		local zIndex = 1 - 0.05*frame.ZIndex
 
 		local tl, br = frame.AbsolutePosition, frame.AbsolutePosition + frame.AbsoluteSize
@@ -2350,87 +3306,27 @@ end]]
 			liveCamera:ScreenPointToRay(br.x, br.y, zIndex).Origin,
 			parts
 		)
-		if fetchProps then
+		if applyMaterial then
+			local tint = BrickColor.new(theme.acrylicTint)
+			local transparency = appearance.acrylicTransparency or theme.acrylicTrans
 			for _, pt in pairs(parts) do
+				pt.Transparency = transparency
+				pt.BrickColor = tint
 				pt.Parent = liveCamera
-			end
-			for propName, propValue in pairs(properties) do
-				for _, pt in pairs(parts) do
-					pt[propName] = propValue
-				end
 			end
 		end
 	end
 
 	UpdateOrientation(true)
 
-	RunService.RenderStepped:Connect(UpdateOrientation)
-
-	local function BindAcrylicTarget(target)
-		local targetFrame = Instance.new("Frame")
-		targetFrame.Name = "CompactAcrylicTarget"
-		targetFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-		targetFrame.BackgroundTransparency = 1
-		targetFrame.Position = UDim2.fromScale(0.5, 0.5)
-		targetFrame.Size = UDim2.new(1, -4, 1, -4)
-		targetFrame.ZIndex = 0
-		targetFrame.Parent = target
-
-		local targetParts = {}
-
-		local function updateTarget(fetchProps)
-			local liveCamera = workspace.CurrentCamera
-			if not liveCamera or not liveCamera.Parent then return end
-			compactAcrylicVisible = IsVisible(targetFrame) and acrylicBlur and not unloaded
-			if not compactAcrylicVisible then
-				for _, pt in pairs(targetParts) do
-					pt.Parent = nil
-				end
-				if not IsVisible(frame) or not acrylicBlur then
-					DepthOfField.Enabled = false
-					DepthOfField.Parent = nil
-				end
-				return
-			end
-
-			if not DepthOfField.Parent then
-				DepthOfField.Parent = Lighting
-			end
-			DepthOfField.Enabled = true
-
-			local tl = targetFrame.AbsolutePosition
-			local br = targetFrame.AbsolutePosition + targetFrame.AbsoluteSize
-			local tr = Vector2.new(br.x, tl.y)
-			local bl = Vector2.new(tl.x, br.y)
-			local zIndex = 1 - 0.05 * targetFrame.ZIndex
-			DrawQuad(
-				liveCamera:ScreenPointToRay(tl.x, tl.y, zIndex).Origin,
-				liveCamera:ScreenPointToRay(tr.x, tr.y, zIndex).Origin,
-				liveCamera:ScreenPointToRay(bl.x, bl.y, zIndex).Origin,
-				liveCamera:ScreenPointToRay(br.x, br.y, zIndex).Origin,
-				targetParts
-			)
-
-			if fetchProps then
-				local transparency = (appearance.acrylicTransparency ~= nil) and appearance.acrylicTransparency or theme.acrylicTrans
-				for _, pt in pairs(targetParts) do
-					pt.Parent = liveCamera
-					pt.Transparency = transparency
-					pt.BrickColor = BrickColor.new(theme.acrylicTint)
-				end
-			end
-		end
-
-		updateTarget(true)
-		local connection = RunService.RenderStepped:Connect(updateTarget)
-		return function()
-			connection:Disconnect()
-			compactAcrylicVisible = false
-			for _, pt in pairs(targetParts) do
-				pcall(function() pt:Destroy() end)
-			end
-			pcall(function() targetFrame:Destroy() end)
-		end
+	do
+		local render = RunService.RenderStepped:Connect(function() UpdateOrientation(false) end)
+		macLib.Destroying:Connect(function()
+			render:Disconnect()
+			for _, part in pairs(parts) do part:Destroy() end
+			DepthOfField.Enabled = false
+			DepthOfField.Parent = nil
+		end)
 	end
 
 	function WindowFunctions:SetTheme(newTheme, wallpaperReport)
@@ -2438,13 +3334,10 @@ end]]
 		theme = t
 
 		base.BackgroundColor3       = t.base
-		base.BackgroundTransparency = acrylicBlur and t.baseTrans or 0
+		base.BackgroundTransparency = ThemeEditor.windowTransparency(t, acrylicBlur)
 		baseUIStroke.Color          = t.stroke
 		baseUIStroke.Transparency   = t.strokeTrans or 0.80
 
-		if baseGradientFrame then
-			baseGradientFrame.BackgroundColor3 = t.stroke
-		end
 		if baseGradient then
 			baseGradient.Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0,    t.gradientStart or 0.72),
@@ -2459,26 +3352,7 @@ end]]
 		searchResults.BackgroundColor3 = t.searchBg
 		ThemeEditor.apply(appearance, t, wallpaperReport)
 
-		if compactBar then
-			compactBar.BackgroundColor3 = t.base
-			compactBar.BackgroundTransparency = acrylicBlur and t.baseTrans or 0
-			local stroke = compactBar:FindFirstChild("CompactStroke")
-			if stroke then
-				stroke.Color = t.stroke
-				stroke.Transparency = math.min((t.strokeTrans or 0.8) + 0.08, 0.92)
-			end
-		end
-		if compactGui then
-			local circle = compactGui:FindFirstChild("CircleToggle", true)
-			if circle then
-				circle.BackgroundColor3 = t.base
-				local circleStroke = circle:FindFirstChild("CircleStroke")
-				if circleStroke then
-					circleStroke.Color = t.stroke
-					circleStroke.Transparency = t.strokeTrans or 0.8
-				end
-			end
-		end
+		if appearance.paintOverlay then appearance.paintOverlay() end
 
 		UpdateOrientation(true)
 	end
@@ -2659,7 +3533,7 @@ end]]
 
 		local uIListLayout1 = Instance.new("UIListLayout")
 		uIListLayout1.Name = "UIListLayout"
-		uIListLayout1.Padding = UDim.new(0, 15)
+		uIListLayout1.Padding = UDim.new(0, 5)
 		uIListLayout1.HorizontalAlignment = Enum.HorizontalAlignment.Center
 		uIListLayout1.SortOrder = Enum.SortOrder.LayoutOrder
 		uIListLayout1.Parent = sectionTabSwitchers
@@ -2729,6 +3603,7 @@ end]]
 				tabImage.Visible = false
 				tabImage.Parent = tabSwitcher
 				setTabIcon(tabImage, tabIcon)
+				ThemeEditor.bind(appearance, tabImage, "icon")
 			end
 
 			local tabSwitcherName = Instance.new("TextLabel")
@@ -2741,9 +3616,9 @@ end]]
 			tabSwitcherName.Text = Settings.Name
 			tabSwitcherName.RichText = true
 			tabSwitcherName.TextColor3 = Color3.fromRGB(255, 255, 255)
-			tabSwitcherName.TextSize = 16
-			tabSwitcherName.TextTransparency = 0.5
-			tabSwitcherName.TextTruncate = Enum.TextTruncate.SplitWord
+			tabSwitcherName.TextSize = 14
+			tabSwitcherName.TextTransparency = 0.24
+			tabSwitcherName.TextTruncate = Enum.TextTruncate.AtEnd
 			tabSwitcherName.TextXAlignment = Enum.TextXAlignment.Left
 			tabSwitcherName.TextYAlignment = Enum.TextYAlignment.Top
 			tabSwitcherName.AutomaticSize = Enum.AutomaticSize.Y
@@ -2751,18 +3626,29 @@ end]]
 			tabSwitcherName.BackgroundTransparency = 1
 			tabSwitcherName.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			tabSwitcherName.BorderSizePixel = 0
-			tabSwitcherName.Size = UDim2.fromScale(1, 0)
+			tabSwitcherName.Size = UDim2.new(1, tabImage and -28 or 0, 0, 0)
 			tabSwitcherName.Parent = tabSwitcher
 			tabSwitcherName.LayoutOrder = 1
 
 			local tabSwitcherUIPadding = Instance.new("UIPadding")
 			tabSwitcherUIPadding.Name = "TabSwitcherUIPadding"
-			tabSwitcherUIPadding.PaddingLeft = UDim.new(0, 24)
-			tabSwitcherUIPadding.PaddingRight = UDim.new(0, 35)
+			tabSwitcherUIPadding.PaddingLeft = UDim.new(0, 13)
+			tabSwitcherUIPadding.PaddingRight = UDim.new(0, 10)
 			tabSwitcherUIPadding.PaddingTop = UDim.new(0, 1)
 			tabSwitcherUIPadding.Parent = tabSwitcher
 
 			tabSwitcher.Parent = sectionTabSwitchers
+			ThemeEditor.bind(appearance, tabSwitcher, "navigation")
+			tabSwitcher.MouseEnter:Connect(function()
+				if appearance.activeTab ~= tabSwitcher then
+					ThemeEditor.animate(appearance, tabSwitcher, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundTransparency = 0.52})
+				end
+			end)
+			tabSwitcher.MouseLeave:Connect(function()
+				if appearance.activeTab ~= tabSwitcher then
+					ThemeEditor.animate(appearance, tabSwitcher, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundTransparency = 1})
+				end
+			end)
 
 			local elements1 = Instance.new("Frame")
 			elements1.Name = "Elements"
@@ -2773,6 +3659,7 @@ end]]
 			elements1.Position = UDim2.fromOffset(0, 63)
 			elements1.Size = UDim2.new(1, 0, 1, -63)
 			elements1.ClipsDescendants = true
+			elements1.Visible = false
 
 			local elementsUIPadding = Instance.new("UIPadding")
 			elementsUIPadding.Name = "ElementsUIPadding"
@@ -2941,6 +3828,7 @@ end]]
 				local sectionUICorner = Instance.new("UICorner")
 				sectionUICorner.Name = "SectionUICorner"
 				sectionUICorner.Parent = sectionOuter
+				sectionUICorner.CornerRadius = UDim.new(0, 12)
 
 				local sectionUIStroke = Instance.new("UIStroke")
 				sectionUIStroke.Name = "SectionUIStroke"
@@ -2948,6 +3836,8 @@ end]]
 				sectionUIStroke.Color = Color3.fromRGB(255, 255, 255)
 				sectionUIStroke.Transparency = 0.95
 				sectionUIStroke.Parent = sectionOuter
+				sectionUIStroke.Transparency = 0.21
+				ThemeEditor.bind(appearance, sectionUIStroke, "line")
 
 				local sectionOuterLayout = Instance.new("UIListLayout")
 				sectionOuterLayout.Name = "SectionUIListLayout"
@@ -2957,10 +3847,10 @@ end]]
 
 				local sectionUIPadding = Instance.new("UIPadding")
 				sectionUIPadding.Name = "SectionUIPadding"
-				sectionUIPadding.PaddingBottom = UDim.new(0, 20)
-				sectionUIPadding.PaddingLeft = UDim.new(0, 20)
-				sectionUIPadding.PaddingRight = UDim.new(0, 18)
-				sectionUIPadding.PaddingTop = UDim.new(0, 22)
+				sectionUIPadding.PaddingBottom = UDim.new(0, 14)
+				sectionUIPadding.PaddingLeft = UDim.new(0, 13)
+				sectionUIPadding.PaddingRight = UDim.new(0, 13)
+				sectionUIPadding.PaddingTop = UDim.new(0, 14)
 				sectionUIPadding.Parent = sectionOuter
 
 				local section = sectionOuter
@@ -2984,7 +3874,7 @@ end]]
 					sectionHeaderTitle.Text = sectionTitle
 					sectionHeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 					sectionHeaderTitle.TextSize = 14
-					sectionHeaderTitle.TextTransparency = 0.35
+					sectionHeaderTitle.TextTransparency = 0.04
 					sectionHeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
 					sectionHeaderTitle.BackgroundTransparency = 1
 					sectionHeaderTitle.BorderSizePixel = 0
@@ -3004,6 +3894,7 @@ end]]
 					sectionArrow.Position = UDim2.new(1, -18, 0, 0)
 					sectionArrow.Size = UDim2.fromOffset(18, 24)
 					sectionArrow.Parent = sectionHeader
+					ThemeEditor.motion(appearance, sectionHeader, sectionHeader, nil, true)
 
 					section = Instance.new("Frame")
 					section.Name = "SectionContent"
@@ -3035,11 +3926,11 @@ end]]
 					end
 
 					sectionHeader.MouseEnter:Connect(function()
-						sectionHeaderTitle.TextTransparency = 0.15
+						sectionHeaderTitle.TextTransparency = 0
 						sectionArrow.TextTransparency = 0.15
 					end)
 					sectionHeader.MouseLeave:Connect(function()
-						sectionHeaderTitle.TextTransparency = 0.35
+						sectionHeaderTitle.TextTransparency = 0.04
 						sectionArrow.TextTransparency = 0.35
 					end)
 					sectionHeader.MouseButton1Click:Connect(function()
@@ -3064,6 +3955,8 @@ end]]
 					end
 					applyCollapsed(Settings.Collapsed == true, false)
 				end
+
+				if Settings.ThemePreview then ThemeEditor.createSample(appearance, section) end
 
 				local function registerElement(name, element)
 					if not name or name == "" then return end
@@ -3099,7 +3992,7 @@ end]]
 					buttonInteract.RichText = true
 					buttonInteract.TextColor3 = Color3.fromRGB(255, 255, 255)
 					buttonInteract.TextSize = 13
-					buttonInteract.TextTransparency = 0.5
+					buttonInteract.TextTransparency = 0.10
 					buttonInteract.TextTruncate = Enum.TextTruncate.AtEnd
 					buttonInteract.TextXAlignment = Enum.TextXAlignment.Left
 					buttonInteract.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -3107,59 +4000,45 @@ end]]
 					buttonInteract.BorderColor3 = Color3.fromRGB(0, 0, 0)
 					buttonInteract.BorderSizePixel = 0
 					buttonInteract.Size = UDim2.fromScale(1, 1)
+					do
+						local padding = Instance.new("UIPadding")
+						padding.PaddingLeft = UDim.new(0, 12)
+						padding.PaddingRight = UDim.new(0, 34)
+						padding.Parent = buttonInteract
+					end
 					buttonInteract.Parent = button
 					buttonInteract.Text = ButtonFunctions.Settings.Name
 
 					local buttonImage = Instance.new("ImageLabel")
 					buttonImage.Name = "ButtonImage"
 					buttonImage.Image = assets.buttonImage
-					buttonImage.ImageTransparency = 0.5
+					buttonImage.ImageTransparency = 0.22
 					buttonImage.AnchorPoint = Vector2.new(1, 0.5)
 					buttonImage.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 					buttonImage.BackgroundTransparency = 1
 					buttonImage.BorderColor3 = Color3.fromRGB(0, 0, 0)
 					buttonImage.BorderSizePixel = 0
-					buttonImage.Position = UDim2.fromScale(1, 0.5)
+					buttonImage.Position = UDim2.new(1, -12, 0.5, 0)
 					buttonImage.Size = UDim2.fromOffset(15, 15)
 					buttonImage.Parent = button
 
-					local TweenSettings = {
-						DefaultTransparency = 0.5,
-						HoverTransparency = 0.3,
-
-						EasingStyle = Enum.EasingStyle.Sine
-					}
-
-					local function ChangeState(State)
-						if State == "Idle" then
-							Tween(buttonInteract, TweenInfo.new(0.2, TweenSettings.EasingStyle), {
-								TextTransparency = TweenSettings.DefaultTransparency
-							}):Play()
-							Tween(buttonImage, TweenInfo.new(0.2, TweenSettings.EasingStyle), {
-								ImageTransparency = TweenSettings.DefaultTransparency
-							}):Play()
-						elseif State == "Hover" then
-							Tween(buttonInteract, TweenInfo.new(0.2, TweenSettings.EasingStyle), {
-								TextTransparency = TweenSettings.HoverTransparency
-							}):Play()
-							Tween(buttonImage, TweenInfo.new(0.2, TweenSettings.EasingStyle), {
-								ImageTransparency = TweenSettings.HoverTransparency
-							}):Play()
-						end
+					do
+						local corner = Instance.new("UICorner")
+						corner.CornerRadius = UDim.new(0, 8)
+						corner.Parent = button
+						local outline = Instance.new("UIStroke")
+						outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+						outline.Transparency = 0.24
+						outline.Parent = button
 					end
+					ThemeEditor.bind(appearance, buttonImage, "icon")
+					ThemeEditor.motion(appearance, buttonInteract, button, "action", true)
 
 					local function Callback()
 						if ButtonFunctions.Settings.Callback then
 							ButtonFunctions.Settings.Callback()
 						end
 					end
-
-					buttonInteract.MouseEnter:Connect(function()
-						ChangeState("Hover")
-					end)
-					buttonInteract.MouseLeave:Connect(function()
-						ChangeState("Idle")
-					end)
 
 					buttonInteract.MouseButton1Click:Connect(Callback)
 					function ButtonFunctions:UpdateName(Name)
@@ -3196,7 +4075,7 @@ end]]
 					toggleName.RichText = true
 					toggleName.TextColor3 = Color3.fromRGB(255, 255, 255)
 					toggleName.TextSize = 13
-					toggleName.TextTransparency = 0.5
+					toggleName.TextTransparency = 0.12
 					toggleName.TextWrapped = true
 					toggleName.TextTruncate = Enum.TextTruncate.None
 					toggleName.TextXAlignment = Enum.TextXAlignment.Left
@@ -3249,15 +4128,25 @@ end]]
 					togglerHead.ImageTransparency = 0.8
 
 					toggle1.Parent = toggle
+					do
+						local outline = Instance.new("UIStroke")
+						outline.Name = "ToggleOutline"
+						outline.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+						outline.Transparency = 1
+						outline.Parent = toggle1
+						local corner = Instance.new("UICorner")
+						corner.CornerRadius = UDim.new(0.5, 0)
+						corner.Parent = toggle1
+					end
 
-					local toggle1Transparency = {Enabled = 0, Disabled = 0.5}
-					local togglerHeadTransparency = {Enabled = 0, Disabled = 0.85}
+					local toggle1Transparency = {Enabled = 0, Disabled = 0.07}
+					local togglerHeadTransparency = {Enabled = 0, Disabled = 0.16}
 
 					local TweenSettings = {
 						Info = TweenInfo.new(0.15, Enum.EasingStyle.Quad),
 
 						EnabledPosition = UDim2.new(1, 0, 0.5, 0),
-						DisabledPosition = UDim2.new(0.5, 0, 0.5, 0),
+						DisabledPosition = UDim2.new(0, 18, 0.5, 0),
 					}
 
 					local togglebool = ToggleFunctions.Settings.Default
@@ -3267,17 +4156,13 @@ end]]
 							or {toggle1Transparency.Disabled, togglerHeadTransparency.Disabled}
 						local position = State and TweenSettings.EnabledPosition or TweenSettings.DisabledPosition
 
-						Tween(toggle1, TweenSettings.Info, {
-							ImageTransparency = transparencyValues[1]
-						}):Play()
-
-						Tween(togglerHead, TweenSettings.Info, {
-							ImageTransparency = transparencyValues[2]
-						}):Play()
-
-						Tween(togglerHead, TweenSettings.Info, {
-							Position = position
-						}):Play()
+						ThemeEditor.animate(appearance, toggle1, TweenSettings.Info, {
+							ImageTransparency = transparencyValues[1],
+						})
+						ThemeEditor.animate(appearance, togglerHead, TweenSettings.Info, {
+							ImageTransparency = transparencyValues[2],
+							Position = position,
+						})
 
 						ToggleFunctions.State = State
 						toggle1:SetAttribute("MacLibEnabled", State == true)
@@ -3288,7 +4173,7 @@ end]]
 					end
 
 					NewState(togglebool)
-					ThemeEditor.bind(appearance, toggle1, "toggle")
+					ThemeEditor.motion(appearance, toggle1, toggle1, "toggle", true)
 
 					local function Toggle()
 						togglebool = not togglebool
@@ -3343,7 +4228,7 @@ end]]
 					sliderName.RichText = true
 					sliderName.TextColor3 = Color3.fromRGB(255, 255, 255)
 					sliderName.TextSize = 13
-					sliderName.TextTransparency = 0.5
+					sliderName.TextTransparency = 0.12
 					sliderName.TextWrapped = true
 					sliderName.TextXAlignment = Enum.TextXAlignment.Left
 					sliderName.TextYAlignment = Enum.TextYAlignment.Top
@@ -3401,10 +4286,11 @@ end]]
 					sliderValueUIPadding.Parent = sliderValue
 
 					sliderValue.Parent = sliderElements
+					ThemeEditor.bind(appearance, sliderValue, "field")
 
 					local sliderElementsUIListLayout = Instance.new("UIListLayout")
 					sliderElementsUIListLayout.Name = "SliderElementsUIListLayout"
-					sliderElementsUIListLayout.Padding = UDim.new(0, 20)
+					sliderElementsUIListLayout.Padding = UDim.new(0, 12)
 					sliderElementsUIListLayout.FillDirection = Enum.FillDirection.Horizontal
 					sliderElementsUIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 					sliderElementsUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -3420,13 +4306,19 @@ end]]
 					sliderBar.BorderColor3 = Color3.fromRGB(0, 0, 0)
 					sliderBar.BorderSizePixel = 0
 					sliderBar.Position = UDim2.fromScale(0.219, 0.457)
-					sliderBar.Size = UDim2.fromOffset(123, 3)
+					sliderBar.Size = UDim2.fromOffset(88, 5)
 
 					local fill = Instance.new("Frame")
 					fill.Name = "SliderFill"
 					fill.Size = UDim2.fromScale(0, 1)
 					fill.BorderSizePixel = 0
 					fill.Parent = sliderBar
+					ThemeEditor.bind(appearance, sliderBar, "track")
+					do
+						local corner = Instance.new("UICorner")
+						corner.CornerRadius = UDim.new(1, 0)
+						corner.Parent = fill
+					end
 					ThemeEditor.bind(appearance, fill, "slider")
 
 					local sliderHead = Instance.new("ImageButton")
@@ -3440,6 +4332,7 @@ end]]
 					sliderHead.Position = UDim2.fromScale(1, 0.5)
 					sliderHead.Size = UDim2.fromOffset(12, 12)
 					sliderHead.Parent = sliderBar
+					ThemeEditor.bind(appearance, sliderHead, "icon")
 
 					sliderBar.Parent = sliderElements
 
@@ -3496,7 +4389,7 @@ end]]
 						local pos = UDim2.new(posXScale, 0, 0.5, 0)
 						sliderHead.Position = pos
 						fill.Size = UDim2.fromScale(math.clamp(posXScale, 0, 1), 1)
-						fill.Visible = posXScale > 0 and (appearance.theme.accent ~= nil or appearance.controlGlow == true)
+						fill.Visible = posXScale > 0
 
 						finalValue = posXScale * (SliderFunctions.Settings.Maximum - SliderFunctions.Settings.Minimum) + SliderFunctions.Settings.Minimum
 
@@ -3566,8 +4459,10 @@ end]]
 						local sliderNameWidth = sliderName.AbsoluteSize.X
 						local totalWidth = sliderElements.AbsoluteSize.X
 
-						local newBarWidth = (totalWidth - (padding + sliderValueWidth + sliderNameWidth + 20)) / baseUIScale.Scale
-						sliderBar.Size = UDim2.new(sliderBar.Size.X.Scale, newBarWidth, sliderBar.Size.Y.Scale, sliderBar.Size.Y.Offset)
+						local newBarWidth = math.max(1, math.round((totalWidth - padding - sliderValueWidth - sliderNameWidth - 20) / baseUIScale.Scale))
+						if sliderBar.Size.X.Offset ~= newBarWidth then
+							sliderBar.Size = UDim2.new(sliderBar.Size.X.Scale, newBarWidth, sliderBar.Size.Y.Scale, sliderBar.Size.Y.Offset)
+						end
 					end
 
 					updateSliderBarSize()
@@ -3615,7 +4510,7 @@ end]]
 					inputName.RichText = true
 					inputName.TextColor3 = Color3.fromRGB(255, 255, 255)
 					inputName.TextSize = 13
-					inputName.TextTransparency = 0.5
+					inputName.TextTransparency = 0.12
 					inputName.TextTruncate = Enum.TextTruncate.AtEnd
 					inputName.TextXAlignment = Enum.TextXAlignment.Left
 					inputName.TextYAlignment = Enum.TextYAlignment.Top
@@ -3670,6 +4565,7 @@ end]]
 					inputBoxUISizeConstraint.Parent = inputBox
 
 					inputBox.Parent = input
+					ThemeEditor.bind(appearance, inputBox, "field")
 
 					local Input = input
 					local InputBox = inputBox
@@ -3755,10 +4651,11 @@ end]]
 					function InputFunctions:UpdatePlaceholder(Placeholder)
 						inputBox.PlaceholderText = Placeholder
 					end
-					function InputFunctions:UpdateText(Text)
+					function InputFunctions:UpdateText(Text, ignoreCallback)
 						local filteredText = AcceptedCharacters(Text)
 						InputBox.Text = filteredText
 						InputFunctions.Text = filteredText
+						if ignoreCallback then return end
 						task.spawn(function()
 							if InputFunctions.Settings.Callback then
 								InputFunctions.Settings.Callback(filteredText)
@@ -3793,7 +4690,7 @@ end]]
 					keybindName.RichText = true
 					keybindName.TextColor3 = Color3.fromRGB(255, 255, 255)
 					keybindName.TextSize = 13
-					keybindName.TextTransparency = 0.5
+					keybindName.TextTransparency = 0.12
 					keybindName.TextTruncate = Enum.TextTruncate.AtEnd
 					keybindName.TextXAlignment = Enum.TextXAlignment.Left
 					keybindName.TextYAlignment = Enum.TextYAlignment.Top
@@ -3849,6 +4746,7 @@ end]]
 					binderBoxUISizeConstraint.Parent = binderBox
 
 					binderBox.Parent = keybind
+					ThemeEditor.bind(appearance, binderBox, "field")
 
 					local focused
 					local isBinding = false
@@ -3999,7 +4897,7 @@ end]]
 					dropdownName.RichText = true
 					dropdownName.TextColor3 = Color3.fromRGB(255, 255, 255)
 					dropdownName.TextSize = 13
-					dropdownName.TextTransparency = 0.5
+					dropdownName.TextTransparency = 0.12
 					dropdownName.TextWrapped = true
 					dropdownName.TextTruncate = Enum.TextTruncate.None
 					dropdownName.TextXAlignment = Enum.TextXAlignment.Left
@@ -4020,12 +4918,12 @@ end]]
 					dropdownUIStroke.Name = "DropdownUIStroke"
 					dropdownUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 					dropdownUIStroke.Color = Color3.fromRGB(255, 255, 255)
-					dropdownUIStroke.Transparency = 0.95
+					dropdownUIStroke.Transparency = 0.35
 					dropdownUIStroke.Parent = dropdown
 
 					local dropdownUICorner = Instance.new("UICorner")
 					dropdownUICorner.Name = "DropdownUICorner"
-					dropdownUICorner.CornerRadius = UDim.new(0, 6)
+					dropdownUICorner.CornerRadius = UDim.new(0, 8)
 					dropdownUICorner.Parent = dropdown
 
 					local dropdownImage = Instance.new("ImageLabel")
@@ -4040,9 +4938,30 @@ end]]
 					dropdownImage.Position = UDim2.new(1, 0, 0, 12)
 					dropdownImage.Size = UDim2.fromOffset(14, 14)
 					dropdownImage.Parent = dropdown
+					ThemeEditor.bind(appearance, dropdownImage, "icon")
+					ThemeEditor.motion(appearance, interact, dropdown, "field", false)
+
+					local selectedPreview, previewedName
+					local function refreshPreview()
+						if not Settings.PreviewPalette or previewedName == Selected[1] then return end
+						previewedName = Selected[1]
+						if selectedPreview then selectedPreview:Destroy() end
+						local palette = previewedName and Settings.PreviewPalette(previewedName)
+						selectedPreview = palette and ThemeEditor.swatches(dropdown, palette) or nil
+						if selectedPreview then
+							selectedPreview.AnchorPoint = Vector2.new(1, 0)
+							selectedPreview.Position = UDim2.new(1, -22, 0, 11)
+						end
+					end
+
+					if Settings.PreviewPalette then
+						dropdownName.Size = UDim2.new(1, -72, 0, 0)
+						dropdownName.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+						refreshPreview()
+					end
 
 					local MIN_HEADER_H = 38
-					local MAX_LIST_H = 148
+					local MAX_LIST_H = Settings.PreviewPalette and 225 or 148
 					local function HEADER_H()
 						local labelH = dropdownName.AbsoluteSize.Y
 						return math.max(labelH > 0 and labelH or MIN_HEADER_H, MIN_HEADER_H)
@@ -4163,7 +5082,7 @@ end]]
 
 						for _, v in pairs(OptionObjs) do
 							local optionText = v.NameLabel.Text:lower()
-							local isVisible = string.find(optionText, searchTerm) ~= nil
+							local isVisible = optionText:find(searchTerm, 1, true) ~= nil
 
 							if v.Button.Visible ~= isVisible then
 								v.Button.Visible = isVisible
@@ -4181,14 +5100,17 @@ end]]
 					uIPadding1.Parent = searchBox
 
 					searchBox.Parent = search
+					ThemeEditor.bind(appearance, search, "field")
+					ThemeEditor.bind(appearance, searchBox, "text")
+					ThemeEditor.bind(appearance, searchIcon, "icon")
 
 					local tweensettings = {
 						duration = 0.2,
 						easingStyle = Enum.EasingStyle.Quint,
-						transparencyIn = 0.2,
-						transparencyOut = 0.5,
+						transparencyIn = 0.06,
+						transparencyOut = 0.29,
 						checkSizeIncrease = 12,
-						checkSizeDecrease = -13,
+						checkSizeDecrease = -10,
 						waitTime = 1
 					}
 
@@ -4234,8 +5156,9 @@ end]]
 								if idx then
 									table.remove(Selected, idx)
 								end
-							else
+							elseif Selected[1] == optionName then
 								Selected = {}
+								DropdownFunctions.Value = nil
 							end
 							Tween(checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
 								Size = UDim2.new(checkmark.Size.X.Scale, tweensettings.checkSizeDecrease, checkmark.Size.Y.Scale, checkmark.Size.Y.Offset)
@@ -4247,6 +5170,7 @@ end]]
 						end
 
 						if Settings.Required and #Selected == 0 and not State then
+							refreshPreview()
 							return
 						end
 
@@ -4255,6 +5179,7 @@ end]]
 						else
 							dropdownName.Text = DropdownFunctions.Settings.Name .. "..."
 						end
+						refreshPreview()
 					end
 
 					local db = false
@@ -4304,6 +5229,13 @@ end]]
 						option.BorderColor3 = Color3.fromRGB(0, 0, 0)
 						option.BorderSizePixel = 0
 						option.Size = UDim2.new(1, 0, 0, 30)
+						option.LayoutOrder = i
+						do
+							local corner = Instance.new("UICorner")
+							corner.CornerRadius = UDim.new(0, 6)
+							corner.Parent = option
+						end
+						ThemeEditor.motion(appearance, option, option, "option", false)
 
 						local optionUIPadding = Instance.new("UIPadding")
 						optionUIPadding.Name = "OptionUIPadding"
@@ -4317,7 +5249,7 @@ end]]
 						optionName.RichText = true
 						optionName.TextColor3 = Color3.fromRGB(255, 255, 255)
 						optionName.TextSize = 13
-						optionName.TextTransparency = 0.5
+						optionName.TextTransparency = 0.29
 						optionName.TextTruncate = Enum.TextTruncate.AtEnd
 						optionName.TextXAlignment = Enum.TextXAlignment.Left
 						optionName.TextYAlignment = Enum.TextYAlignment.Top
@@ -4329,6 +5261,16 @@ end]]
 						optionName.BorderSizePixel = 0
 						optionName.Position = UDim2.fromScale(1.3e-07, 0.5)
 						optionName.Parent = option
+						if Settings.PreviewPalette then
+							local palette = Settings.PreviewPalette(v)
+							if palette then
+								local strip = ThemeEditor.swatches(option, palette)
+								strip.LayoutOrder = 0
+								optionName.LayoutOrder = 1
+								optionName.AutomaticSize = Enum.AutomaticSize.Y
+								optionName.Size = UDim2.new(1, -84, 0, 0)
+							end
+						end
 
 						local optionUIListLayout = Instance.new("UIListLayout")
 						optionUIListLayout.Name = "OptionUIListLayout"
@@ -4514,6 +5456,8 @@ end]]
 						end
 						OptionObjs = {}
 						Selected = {}
+						DropdownFunctions.Value = nil
+						refreshPreview()
 
 						if dropped then
 							dropdown.Size = UDim2.new(1, 0, 0, CalculateDropdownSize())
@@ -4589,7 +5533,7 @@ end]]
 					colorpickerName.Text = Settings.Name
 					colorpickerName.TextColor3 = Color3.fromRGB(255, 255, 255)
 					colorpickerName.TextSize = 13
-					colorpickerName.TextTransparency = 0.5
+					colorpickerName.TextTransparency = 0.12
 					colorpickerName.RichText = true
 					colorpickerName.TextTruncate = Enum.TextTruncate.AtEnd
 					colorpickerName.TextXAlignment = Enum.TextXAlignment.Left
@@ -5502,6 +6446,8 @@ end]]
 					paragraph.Parent = prompt
 
 					prompt.Parent = colorPicker
+					ThemeEditor.bind(appearance, prompt, "panel")
+					ThemeEditor.bind(appearance, globalSettingsUIStroke, "line")
 
 					colorPicker.Parent = base
 
@@ -6141,41 +7087,32 @@ end]]
 				return SectionFunctions
 			end
 
-			local function SelectCurrentTab()
-				local easetime = 0.15
-
-				if currentTabInstance then
-					currentTabInstance.Parent = nil
-				end
-
-				for i, tabInfo in pairs(tabs) do
-					Tween(i, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
-						BackgroundTransparency = (i == tabSwitcher and 0.98 or 1)
-					}):Play()
-
-					if tabInfo.tabStroke then
-						Tween(tabInfo.tabStroke, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
-							Transparency = (i == tabSwitcher and 0.95 or 1)
-						}):Play()
-					end
-					if tabInfo.switcherImage then
-						Tween(tabInfo.switcherImage, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
-							ImageTransparency = (i == tabSwitcher and 0.1 or 0.5)
-						}):Play()
-					end
-					if tabInfo.switcherName then
-						Tween(tabInfo.switcherName, TweenInfo.new(easetime, Enum.EasingStyle.Sine), {
-							TextTransparency = (i == tabSwitcher and 0.1 or 0.5)
-						}):Play()
-					end
-				end
-
-				tabs[tabSwitcher].tabContent.Parent = content
-				currentTabInstance = tabs[tabSwitcher].tabContent
-				currentTab.Text = Settings.Name
+			local function paintSelection(active)
+				local fade = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+				ThemeEditor.animate(appearance, tabSwitcher, fade, {BackgroundTransparency = active and 0.16 or 1})
+				tabSwitcherUIStroke.Transparency = active and 0.56 or 1
+				tabSwitcherName.TextTransparency = active and 0.02 or 0.24
+				if tabImage then tabImage.ImageTransparency = active and 0.02 or 0.34 end
+				elements1.Visible = active
 			end
 
-			tabContext.selectFunc = SelectCurrentTab
+			local function SelectCurrentTab(instant)
+				appearance.settingsFallback = nil
+				if appearance.activeTab == tabSwitcher then
+					currentTab.Text = Settings.Name
+					return
+				end
+
+				if appearance.clearSelection then appearance.clearSelection(false) end
+				appearance.activeTab = tabSwitcher
+				appearance.activePage = elementsScrolling
+				appearance.clearSelection = paintSelection
+				currentTab.Text = Settings.Name
+				paintSelection(true)
+				ThemeEditor.bouncePage(appearance, not instant and elementsScrolling or nil)
+			end
+
+			tabContext.selectFunc = function() SelectCurrentTab(true) end
 
 			tabSwitcher.MouseButton1Click:Connect(function()
 				SelectCurrentTab()
@@ -6313,12 +7250,10 @@ end]]
 				end
 			end
 
-			tabs[tabSwitcher] = {
-				tabContent = elements1,
-				tabStroke = tabSwitcherUIStroke,
-				switcherImage = tabImage,
-				switcherName = tabSwitcherName,
-			}
+			elements1.Parent = content
+			if not appearance.activeTab or appearance.settingsFallback then
+				SelectCurrentTab(true)
+			end
 
 			return TabFunctions
 		end
@@ -6331,33 +7266,43 @@ end]]
 
 	local function SaveGlobalUISettings()
 		if _isLoadingUISettings then return end
-		if isStudio or not writefile then return end
-		if isfolder and not isfolder("LixHub") then
-			if makefolder then pcall(makefolder, "LixHub") end
+		if isStudio or type(writefile) ~= "function" then return false end
+		if type(isfolder) == "function" and type(makefolder) == "function" then
+			local ok, exists = pcall(isfolder, "LixHub")
+			if ok and not exists then pcall(makefolder, "LixHub") end
 		end
 		local data = { objects = {}, customThemes = ThemeEditor.writeThemes(appearance.custom) }
-		if compactBar then
-			data.compactPosition = {
-				xScale = compactBar.Position.X.Scale,
-				xOffset = compactBar.Position.X.Offset,
-				yScale = compactBar.Position.Y.Scale,
-				yOffset = compactBar.Position.Y.Offset,
+		if appearance.draftEdited then
+			data.activeAppearance = ThemeEditor.writeTheme(appearance.draft)
+		end
+		if appearance.windowMoved then
+			local position = base.Position
+			data.windowPosition = {
+				xScale = position.X.Scale, xOffset = position.X.Offset,
+				yScale = position.Y.Scale, yOffset = position.Y.Offset,
 			}
+		end
+		data.sidebarRatio = appearance.sidebarRatio
+		if appearance.resizedSize then
+			data.windowSize = {width = appearance.resizedSize.X, height = appearance.resizedSize.Y}
+		end
+		if next(appearance.overlayPositions) then
+			data.overlayPositions = appearance.overlayPositions
 		end
 		local opt
 		if appearance.selected then
 			table.insert(data.objects, { type="Dropdown", flag="__maclib_theme", value=appearance.selected })
 		end
-		opt = MacLib.Options["__maclib_uiscale"]
-		if opt and _manualScale then
-			local scaleText = opt.Text or (type(opt.GetInput) == "function" and opt:GetInput()) or nil
-			table.insert(data.objects, { type="Input", flag="__maclib_uiscale", value=scaleText and tostring(scaleText) or nil })
+		if _manualScale then
+			table.insert(data.objects, { type="Input", flag="__maclib_uiscale", value=tostring(_appliedScale) })
 		end
 		opt = MacLib.Options["__maclib_autohide"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autohide", state=opt.State or false }) end
 		opt = MacLib.Options["__maclib_acrylicblur"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_acrylicblur", state=opt.State or false }) end
 		table.insert(data.objects, { type="Toggle", flag="__maclib_controlglow", state=appearance.controlGlow == true })
+		table.insert(data.objects, { type="Toggle", flag="__maclib_reducemotion", state=appearance.reduceMotion == true })
+		table.insert(data.objects, { type="Toggle", flag="__maclib_watermark", state=appearance.watermark == true })
 		opt = MacLib.Options["__maclib_togglekey"]
 		if opt then
 			local bind = opt:GetBind()
@@ -6369,19 +7314,53 @@ end]]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autorejoin", state=opt.State or false }) end
 		local ok, encoded = pcall(HttpService.JSONEncode, HttpService, data)
 		if not ok then return false end
-		local saved = pcall(writefile, GLOBAL_UI_PATH, encoded)
-		return saved
+		local saved, result = pcall(writefile, GLOBAL_UI_PATH, encoded)
+		return saved and result ~= false
 	end
 
+	appearance.persistUI = SaveGlobalUISettings
+
 	local function LoadGlobalUISettings()
-		if not (type(isfile) == "function" and isfile(GLOBAL_UI_PATH)) then return end
+		if type(readfile) ~= "function" then return end
 		local raw
 		local readOk = pcall(function() raw = readfile(GLOBAL_UI_PATH) end)
 		if not readOk or type(raw) ~= "string" or raw == "" then return end
 		local ok, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
-		if not ok or type(decoded) ~= "table" or type(decoded.objects) ~= "table" then return end
-		if type(decoded.compactPosition) == "table" then
-			_loadedCompactPosition = decoded.compactPosition
+		if not ok or type(decoded) ~= "table" then return end
+		if type(decoded.windowSize) == "table" then
+			local width, height = tonumber(decoded.windowSize.width), tonumber(decoded.windowSize.height)
+			if width and width == width and height and height == height then
+				appearance.resizedSize = Vector2.new(math.clamp(width, 600, 1280), math.clamp(height, 400, 900))
+				WindowFunctions:SetSize(UDim2.fromOffset(appearance.resizedSize.X, appearance.resizedSize.Y))
+			end
+		end
+		if type(decoded.windowPosition) == "table" then
+			local position = decoded.windowPosition
+			local sx, ox = tonumber(position.xScale), tonumber(position.xOffset)
+			local sy, oy = tonumber(position.yScale), tonumber(position.yOffset)
+			if sx and math.abs(sx) < math.huge and ox and math.abs(ox) < math.huge
+				and sy and math.abs(sy) < math.huge and oy and math.abs(oy) < math.huge then
+				base.Position = UDim2.new(sx, ox, sy, oy)
+				appearance.windowMoved = true
+				task.defer(clampWindowToViewport)
+			end
+		end
+		local ratio = tonumber(decoded.sidebarRatio)
+		if ratio and ratio == ratio then
+			appearance.sidebarRatio = math.clamp(ratio, 0.20, 0.38)
+			sidebar.Size = UDim2.fromScale(appearance.sidebarRatio, 1)
+			content.Size = UDim2.fromScale(1 - appearance.sidebarRatio, 1)
+		end
+		if type(decoded.overlayPositions) == "table" then
+			for _, key in ipairs({"circle", "watermark"}) do
+				local position = decoded.overlayPositions[key]
+				if type(position) == "table" then
+					local x, y = tonumber(position.x), tonumber(position.y)
+					if x and math.abs(x) < math.huge and y and math.abs(y) < math.huge then
+						appearance.overlayPositions[key] = {x = x, y = y}
+					end
+				end
+			end
 		end
 		appearance.custom = ThemeEditor.readThemes(decoded.customThemes)
 		if next(appearance.custom) then ThemeEditor.refreshOptions(appearance) end
@@ -6392,27 +7371,32 @@ end]]
 				if o.flag ~= "__maclib_theme" or option:IsOption(o.value) then option:UpdateSelection(o.value) end
 			end,
 			Slider   = function(o) if MacLib.Options[o.flag] and o.value then MacLib.Options[o.flag]:UpdateValue(tonumber(o.value) or o.value) end end,
-			Input    = function(o) if MacLib.Options[o.flag] and o.value then pcall(function() MacLib.Options[o.flag]:UpdateText(o.value) end) end end,
+			Input = function(o)
+				if o.flag ~= "__maclib_uiscale" then return end
+				local scale = tonumber(o.value)
+				if not scale or scale ~= scale then return end
+				scale = math.clamp(scale, 0.5, 2.0)
+				WindowFunctions:SetScale(scale)
+				local option = MacLib.Options[o.flag]
+				if option then option:UpdateText(tostring(scale), true) end
+			end,
 			Toggle   = function(o) if MacLib.Options[o.flag] and o.state ~= nil then MacLib.Options[o.flag]:UpdateState(o.state) end end,
 			Keybind  = function(o) if MacLib.Options[o.flag] and o.bind   then MacLib.Options[o.flag]:Bind(Enum.KeyCode[o.bind]) end end,
 		}
 		local loaded = {}
-		for _, o in next, decoded.objects do
-			local hasData = (o.value ~= nil) or (o.state ~= nil) or (o.bind ~= nil)
-			if loaders[o.type] and hasData then
-				pcall(loaders[o.type], o)
-				loaded[o.flag] = true
+		local objects = type(decoded.objects) == "table" and decoded.objects or {}
+		for _, o in pairs(objects) do
+			if type(o) == "table" and ThemeEditor.isGlobalFlag(o.flag) and loaders[o.type] then
+				if pcall(loaders[o.type], o) then loaded[o.flag] = true end
 			end
 		end
-		local scaleOpt = MacLib.Options["__maclib_uiscale"]
-		if loaded["__maclib_uiscale"] and scaleOpt then
-			local rawScale
-			pcall(function() rawScale = scaleOpt.Value end)
-			if not rawScale then
-				pcall(function() rawScale = scaleOpt:GetText() end)
-			end
-			local n = tonumber(rawScale)
-			if n then pcall(function() WindowFunctions:SetScale(math.clamp(n, 0.5, 2.0)) end) end
+		local restored = ThemeEditor.readTheme(decoded.activeAppearance, theme)
+		if restored then
+			appearance.draft = ThemeEditor.makeDraft(restored)
+			appearance.draftEdited = true
+			WindowFunctions:SetTheme(restored)
+			if appearance.refreshEditor then appearance.refreshEditor() end
+			if appearance.refreshWeather then appearance.refreshWeather() end
 		end
 		local blurOpt = MacLib.Options["__maclib_acrylicblur"]
 		if loaded["__maclib_acrylicblur"] and blurOpt then
@@ -6445,19 +7429,34 @@ end]]
 		local tg = WindowFunctions:TabGroup()
 		local settingsTab = tg:Tab({ Name = "UI Settings", Icon = "settings" })
 		settingsTabFunctions = settingsTab
+		appearance.settingsFallback = true
 
-		local themeSection = settingsTab:Section({ Name = "Theme", Side = "Left" })
+		local themeSection = settingsTab:Section({ Name = "Appearance", Side = "Left", Collapsible = true })
 		appearance.dropdown = themeSection:Dropdown({
-			Name = "Theme",
+			Name = "Preset",
+			Search = true,
+			Required = true,
+			PreviewPalette = function(name)
+				local theme = appearance.custom[name] or Themes[name]
+				return theme and ThemeEditor.palette(theme)
+			end,
 			Options = table.clone(ThemeEditor.presets),
 			Default = table.find(ThemeEditor.presets, appearance.selected),
 			Callback = function(value)
 				if not value or not (Themes[value] or appearance.custom[value]) then return end
 				appearance.selected = value
 				appearance.pendingWallpaper = nil
+				appearance.pendingIcon = nil
+				appearance.pendingWeatherIcon = nil
+				appearance.draftEdited = nil
+				if appearance.draftSave then
+					task.cancel(appearance.draftSave)
+					appearance.draftSave = nil
+				end
 				WindowFunctions:SetTheme(value)
 				appearance.draft = ThemeEditor.makeDraft(theme)
 				if appearance.refreshEditor then appearance.refreshEditor() end
+				if appearance.refreshWeather then appearance.refreshWeather() end
 				if not appearance.updatingDropdown then SaveGlobalUISettings() end
 			end,
 		}, "__maclib_theme")
@@ -6465,7 +7464,7 @@ end]]
 
 		do
 			local editor
-			editor = settingsTab:Section({Name = "Custom Theme", Side = "Right", Collapsible = true, Collapsed = true,
+			editor = settingsTab:Section({Name = "Theme Workshop", Side = "Right", Collapsible = true, Collapsed = true, ThemePreview = true,
 				OnExpand = function()
 					if appearance.refreshEditor then return end
 					ThemeEditor.build(editor, appearance, WindowFunctions, SaveGlobalUISettings)
@@ -6473,23 +7472,19 @@ end]]
 			})
 		end
 
+		do
+			local weatherSection
+			weatherSection = settingsTab:Section({Name = "Weather", Side = "Right", Collapsible = true, Collapsed = true,
+				OnExpand = function()
+					if appearance.refreshWeather then return end
+					ThemeEditor.buildWeather(weatherSection, appearance, WindowFunctions, SaveGlobalUISettings)
+				end,
+			})
+		end
+
 		local keySection = settingsTab:Section({ Name = "Key", Side = "Left" })
 
-		local keyTimerInfoLabel = keySection:Label({ Text = "Expires in: —" })
-
-		task.spawn(function()
-			while not unloaded do
-				task.wait(1)
-				if keyTimerLabel and keyTimerInfoLabel then
-					local txt = keyTimerLabel.Text
-					if txt == "" or not keyTimerLabel.Visible then
-						txt = "—"
-					end
-					local timeOnly = txt:match("%[.-%]%s*(.+)") or txt
-					keyTimerInfoLabel:UpdateName("Expires in: " .. timeOnly)
-				end
-			end
-		end)
+		keyTimerInfoLabel = keySection:Label({ Text = "Access: Free" })
 
 		keySection:Button({
 			Name = "Refresh",
@@ -6660,6 +7655,25 @@ end]]
 				SaveGlobalUISettings()
 			end,
 		}, "__maclib_controlglow").IgnoreConfig = true
+		displaySection:Toggle({
+			Name = "Reduce Control Motion",
+			Default = false,
+			Callback = function(state)
+				appearance.reduceMotion = state == true
+				if state then ThemeEditor.bouncePage(appearance) end
+				ThemeEditor.updateWeatherAnimation(appearance)
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_reducemotion").IgnoreConfig = true
+		displaySection:Toggle({
+			Name = "Watermark",
+			Default = false,
+			Callback = function(state)
+				appearance.watermark = state == true
+				if appearance.showWatermark then appearance.showWatermark() end
+				SaveGlobalUISettings()
+			end,
+		}, "__maclib_watermark").IgnoreConfig = true
 
 		local automationSection = settingsTab:Section({ Name = "Automation", Side = "Left" })
 		if not disableAutoExecute then
@@ -6717,6 +7731,8 @@ end]]
 		notificationUIStroke.Color = theme.stroke
 		notificationUIStroke.Transparency = theme.strokeTrans or 0.80
 		notificationUIStroke.Parent = notification
+		ThemeEditor.bind(appearance, notification, "panel")
+		ThemeEditor.bind(appearance, notificationUIStroke, "line")
 
 		local notificationUICorner = Instance.new("UICorner")
 		notificationUICorner.Name = "NotificationUICorner"
@@ -7076,6 +8092,8 @@ end]]
 		uIListLayout2.Parent = prompt
 
 		prompt.Parent = dialog
+		ThemeEditor.bind(appearance, prompt, "panel")
+		ThemeEditor.bind(appearance, globalSettingsUIStroke, "line")
 
 		dialog.Parent = dialogCanvas
 
@@ -7198,76 +8216,10 @@ end]]
 
 	function WindowFunctions:SetState(State)
 		if windowState == State then return end
-		_stateAnimationId = _stateAnimationId + 1
-		local animationId = _stateAnimationId
 		windowState = State
-
-		if not compactBar or not compactScale then
-			base.Visible = State
-			return
-		end
-
-		local restingPosition = compactBar.Position
-		local baseCenter = base.AbsolutePosition + base.AbsoluteSize / 2
-		if baseCenter.X == 0 and baseCenter.Y == 0 then
-			baseCenter = getViewportSize() / 2
-		end
-		local transitionPosition = UDim2.fromOffset(baseCenter.X, baseCenter.Y - 22)
-
-		if State then
-			base.Visible = true
-			base.GroupTransparency = 1
-			baseUIScale.Scale = _appliedScale * 0.94
-			compactBar.Visible = true
-			compactBar.GroupTransparency = 0
-			TweenService:Create(base, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				GroupTransparency = 0,
-			}):Play()
-			TweenService:Create(baseUIScale, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				Scale = _appliedScale,
-			}):Play()
-			TweenService:Create(compactBar, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-				Position = transitionPosition,
-				GroupTransparency = 1,
-			}):Play()
-			TweenService:Create(compactScale, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-				Scale = 0.72,
-			}):Play()
-			task.delay(0.21, function()
-				if animationId ~= _stateAnimationId or not compactBar then return end
-				compactBar.Visible = false
-				compactBar.Position = restingPosition
-				compactBar.GroupTransparency = 0
-				compactScale.Scale = 1
-			end)
-		else
-			compactBar.Position = transitionPosition
-			compactBar.GroupTransparency = 1
-			compactScale.Scale = 0.72
-			compactBar.Visible = true
-			base.Visible = true
-			base.GroupTransparency = 0
-			TweenService:Create(base, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-				GroupTransparency = 1,
-			}):Play()
-			TweenService:Create(baseUIScale, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-				Scale = _appliedScale * 0.94,
-			}):Play()
-			TweenService:Create(compactBar, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				Position = restingPosition,
-				GroupTransparency = 0,
-			}):Play()
-			TweenService:Create(compactScale, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				Scale = 1,
-			}):Play()
-			task.delay(0.21, function()
-				if animationId ~= _stateAnimationId then return end
-				base.Visible = false
-				base.GroupTransparency = 0
-				baseUIScale.Scale = _appliedScale
-				if clampCompactBar then clampCompactBar() end
-			end)
-		end
+		base.Visible = State
+		local page = State and not appearance.resizing and appearance.activePage or nil
+		ThemeEditor.bouncePage(appearance, page, true)
 	end
 
 	function WindowFunctions:GetState()
@@ -7285,6 +8237,11 @@ end]]
 	local onUnloadCallback
 
 	function WindowFunctions:Unload()
+		if appearance.draftSave then
+			task.cancel(appearance.draftSave)
+			appearance.draftSave = nil
+			SaveGlobalUISettings()
+		end
 		if _keyTimerConn then
 			_keyTimerConn:Disconnect()
 			_keyTimerConn = nil
@@ -7295,18 +8252,6 @@ end]]
 		if _viewportConnection then
 			_viewportConnection:Disconnect()
 			_viewportConnection = nil
-		end
-		if _compactFPSConnection then
-			_compactFPSConnection:Disconnect()
-			_compactFPSConnection = nil
-		end
-		if _compactInputConnection then
-			_compactInputConnection:Disconnect()
-			_compactInputConnection = nil
-		end
-		if _compactBlurCleanup then
-			_compactBlurCleanup()
-			_compactBlurCleanup = nil
 		end
 		if compactGui then
 			pcall(function() compactGui:Destroy() end)
@@ -7321,13 +8266,7 @@ end]]
 	end
 
 	local function ToggleMenu()
-		local state = not WindowFunctions:GetState()
-		WindowFunctions:SetState(state)
-		WindowFunctions:Notify({
-			Title = Settings.Title,
-			Description = (state and "Maximized" or "Minimized") .. " the menu. Use " .. tostring(MenuKeybind.Name) .. " or the button to toggle it.",
-			Lifetime = 5
-		})
+		WindowFunctions:SetState(not WindowFunctions:GetState())
 	end
 
 	UserInputService.InputEnded:Connect(function(inp, gpe)
@@ -7364,10 +8303,10 @@ end]]
 
 	function WindowFunctions:SetAcrylicBlurState(State)
 		acrylicBlur = State
-		base.BackgroundTransparency = State and theme.baseTrans or 0
-		if compactBar then
-			compactBar.BackgroundTransparency = State and theme.baseTrans or 0
-		end
+		base.BackgroundTransparency = ThemeEditor.windowTransparency(theme, State)
+		ThemeEditor.setAcrylic(appearance, State)
+		if appearance.paintOverlay then appearance.paintOverlay() end
+		UpdateOrientation(true)
 	end
 
 	function WindowFunctions:GetAcrylicBlurState()
@@ -7383,6 +8322,7 @@ end]]
 				appearance.acrylicTransparency = math.clamp(n, 0, 1)
 			end
 		end
+		UpdateOrientation(true)
 	end
 
 	function WindowFunctions:GetAcrylicTransparency()
@@ -7391,9 +8331,8 @@ end]]
 
 	local function _SetUserInfoState(State)
 		lixLogo.Visible = true
-		title.Text = Settings.Title or "LixHub"
-		keyTimerLabel.Text = "[FREE]"
-		keyTimerLabel.Visible = true
+		gameTitle.Text = Settings.Title or ""
+		gameTitle.Visible = gameTitle.Text ~= ""
 	end
 
 	local showUserInfo
@@ -7434,9 +8373,17 @@ end]]
 
 	_isLoadingUISettings = true
 	ThemeEditor.apply(appearance, theme)
+	windowState = true
 	LoadGlobalUISettings()
 	_isLoadingUISettings = false
 	applyAutomaticScale()
+	ThemeEditor.addResizeGrip(appearance, base, getViewportSize, function(size, origin, scale)
+		appearance.resizedSize = size
+		_windowBaseSize = UDim2.fromOffset(size.X, size.Y)
+		appearance.windowMoved = true
+		base.Size = _windowBaseSize
+		base.Position = UDim2.fromOffset(origin.X + size.X * scale / 2, origin.Y + size.Y * scale / 2)
+	end, SaveGlobalUISettings)
 
 	local _keyTimerConn = nil
 	local _lastKeyExpiresAt = nil
@@ -7450,17 +8397,12 @@ end]]
 		_keyTimerConn = nil
 	end
 
+	local access = tier == "Premium" and "Premium" or "Free"
+	local prefix = "Access: " .. access
 	if expiresAt == nil or expiresAt == "" then
-		keyTimerLabel.Visible = false
+		keyTimerInfoLabel:UpdateName(prefix)
 		return
 	end
-
-	local isPremium = tier == "Premium"
-
-	local prefix = isPremium and "[PREMIUM]" or "[FREE]"
-	local normalColor = isPremium
-		and Color3.fromRGB(255, 195, 70)
-		or Color3.fromRGB(0, 210, 100)
 
 	local function parseCompact(value)
 		if type(value) ~= "string" then
@@ -7519,9 +8461,7 @@ end]]
 			or expiresAt == -1
 			or expiresAt == math.huge
 		then
-			keyTimerLabel.Text = prefix
-			keyTimerLabel.TextColor3 = normalColor
-			keyTimerLabel.Visible = true
+			keyTimerInfoLabel:UpdateName(prefix)
 			return
 		end
 
@@ -7531,9 +8471,7 @@ end]]
 	end
 
 	if not expiry then
-		keyTimerLabel.Text = "Key: invalid date"
-		keyTimerLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-		keyTimerLabel.Visible = true
+		keyTimerInfoLabel:UpdateName("Key expiry unavailable")
 		return
 	end
 
@@ -7541,11 +8479,8 @@ end]]
 		seconds = math.floor(seconds)
 
 		if seconds <= 0 then
-			keyTimerLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-			return "[EXPIRED]"
+			return "Key expired"
 		end
-
-		keyTimerLabel.TextColor3 = normalColor
 
 		local days = math.floor(seconds / 86400)
 		local hours = math.floor((seconds % 86400) / 3600)
@@ -7553,15 +8488,14 @@ end]]
 		local secs = seconds % 60
 
 		if days > 0 then
-			return string.format("%s %dd %dh", prefix, days, hours)
+			return string.format("%s · %dd %dh left", prefix, days, hours)
 		elseif hours > 0 then
-			return string.format("%s %dh %dm", prefix, hours, minutes)
+			return string.format("%s · %dh %dm left", prefix, hours, minutes)
 		else
-			return string.format("%s %dm %ds", prefix, minutes, secs)
+			return string.format("%s · %dm %ds left", prefix, minutes, secs)
 		end
 	end
 
-	keyTimerLabel.Visible = true
 
 	local lastDisplayedSecond
 
@@ -7571,7 +8505,7 @@ end]]
 
 		if currentSecond ~= lastDisplayedSecond then
 			lastDisplayedSecond = currentSecond
-			keyTimerLabel.Text = formatRemaining(remaining)
+			keyTimerInfoLabel:UpdateName(formatRemaining(remaining))
 		end
 
 		if remaining <= 0 and _keyTimerConn then
@@ -7596,7 +8530,7 @@ end]]
 				}
 			end,
 			Load = function(Flag, data)
-				if Flag ~= "__maclib_controlglow" and MacLib.Options[Flag] and type(data.state) == "boolean" then
+				if MacLib.Options[Flag] and type(data.state) == "boolean" then
 					MacLib.Options[Flag]:UpdateState(data.state)
 				end
 			end
@@ -7652,7 +8586,7 @@ end]]
 				}
 			end,
 			Load = function(Flag, data)
-				if Flag ~= "__maclib_theme" and MacLib.Options[Flag] and data.value then
+				if MacLib.Options[Flag] and data.value then
 					MacLib.Options[Flag]:UpdateSelection(data.value)
 				end
 			end
@@ -7762,7 +8696,7 @@ end]]
 
 		for flag, option in next, MacLib.Options do
 			if not ClassParser[option.Class] then continue end
-			if option.IgnoreConfig then continue end
+			if option.IgnoreConfig or ThemeEditor.isGlobalFlag(flag) then continue end
 
 			table.insert(data.objects, preserved[flag] or ClassParser[option.Class].Save(flag, option))
 		end
@@ -7790,7 +8724,7 @@ end]]
 		if not success then return false, "Unable to decode JSON data." end
 
 		for _, option in next, decoded.objects do
-			if ClassParser[option.type] then
+			if ClassParser[option.type] and not ThemeEditor.isGlobalFlag(option.flag) then
 				if type(checkpoint) == "function" then
 					checkpoint()
 					local ok, err = pcall(ClassParser[option.type].Load, option.flag, option)
@@ -7847,11 +8781,11 @@ end]]
 		pcall(function() ContentProvider:PreloadAsync(assetList) end)
 	end)
 	macLib.Enabled = true
-	windowState = true
 
 	(function()
 		compactGui = Instance.new("ScreenGui")
-		compactGui.Name = "LixHubCompactTopbar"
+		compactGui.Name = "LixHubOverlay"
+		compactGui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 		compactGui.ResetOnSpawn = false
 		compactGui.DisplayOrder = 10000030
 		pcall(function() compactGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling end)
@@ -7861,6 +8795,9 @@ end]]
 			pcall(function() guiParent = game:GetService("CoreGui") end)
 		end
 		compactGui.Parent = guiParent
+		macLib.Destroying:Connect(function()
+			if compactGui then compactGui:Destroy() end
+		end)
 
 		local circleToggle = Instance.new("ImageButton")
 		circleToggle.Name = "CircleToggle"
@@ -7870,10 +8807,9 @@ end]]
 		circleToggle.BackgroundTransparency = 0
 		circleToggle.BorderSizePixel = 0
 		circleToggle.Position = UDim2.fromOffset(14, 64)
-		circleToggle.Size = UDim2.fromOffset(46, 46)
-		circleToggle.Image = "rbxassetid://139436994731049"
-		circleToggle.ImageTransparency = 0
-		circleToggle.ScaleType = Enum.ScaleType.Fit
+		circleToggle.Size = UDim2.fromOffset(52, 52)
+		circleToggle.Image = ""
+		circleToggle.ImageTransparency = 1
 		circleToggle.ZIndex = 10020
 		circleToggle.Parent = compactGui
 
@@ -7881,12 +8817,29 @@ end]]
 		circleCorner.CornerRadius = UDim.new(1, 0)
 		circleCorner.Parent = circleToggle
 
+		local circleIcon = Instance.new("ImageLabel")
+		circleIcon.Name = "HubIcon"
+		circleIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+		circleIcon.Position = UDim2.fromScale(0.5, 0.5)
+		circleIcon.Size = UDim2.fromScale(0.77, 0.77)
+		circleIcon.BackgroundTransparency = 1
+		circleIcon.ScaleType = Enum.ScaleType.Crop
+		circleIcon.Image = appearance.iconAsset or ThemeEditor.defaultIcon
+		circleIcon.ZIndex = circleToggle.ZIndex + 1
+		circleIcon.Parent = circleToggle
+		appearance.minimizedIcon = circleIcon
+		circleCorner:Clone().Parent = circleIcon
+
 		local circleStroke = Instance.new("UIStroke")
 		circleStroke.Name = "CircleStroke"
 		circleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		circleStroke.Color = theme.stroke
-		circleStroke.Transparency = theme.strokeTrans or 0.8
+		circleStroke.Color = ThemeEditor.white
+		circleStroke.Thickness = 2
+		circleStroke.Transparency = 0.14
 		circleStroke.Parent = circleToggle
+		local ring = Instance.new("UIGradient")
+		ring.Rotation = 35
+		ring.Parent = circleStroke
 
 		local circleShadow = Instance.new("ImageLabel")
 		circleShadow.Name = "Shadow"
@@ -7901,291 +8854,104 @@ end]]
 		circleShadow.ZIndex = circleToggle.ZIndex - 1
 		circleShadow.Parent = circleToggle
 
-		local function clampCircleToggle()
-			if not circleToggle.Parent then return end
-			local viewport = getViewportSize()
-			local size = circleToggle.AbsoluteSize
-			local margin = 8
-			local x = math.clamp(circleToggle.AbsolutePosition.X, margin, math.max(margin, viewport.X - size.X - margin))
-			local y = math.clamp(circleToggle.AbsolutePosition.Y, margin, math.max(margin, viewport.Y - size.Y - margin))
-			circleToggle.Position = UDim2.fromOffset(x, y)
+		local function bindOverlayDrag(widget, key, callback)
+			local saved = appearance.overlayPositions[key]
+			if saved then widget.Position = UDim2.fromOffset(saved.x, saved.y) end
+			return ThemeEditor.dragOverlay(compactGui, widget, function(x, y)
+				appearance.overlayPositions[key] = {x = x, y = y}
+				SaveGlobalUISettings()
+			end, callback)
 		end
 
-		local circleDragging = false
-		local circleMoved = false
-		local circleDragStart
-		local circleStartPosition
-		local circleInputConnection
-
-		circleToggle.InputBegan:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-			circleDragging = true
-			circleMoved = false
-			circleDragStart = input.Position
-			circleStartPosition = circleToggle.Position
-			input.Changed:Connect(function()
-				if input.UserInputState ~= Enum.UserInputState.End then return end
-				circleDragging = false
-				task.defer(clampCircleToggle)
-			end)
-		end)
-
-		circleInputConnection = UserInputService.InputChanged:Connect(function(input)
-			if not circleDragging then return end
-			if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-			local delta = input.Position - circleDragStart
-			if delta.Magnitude > 5 then circleMoved = true end
-			circleToggle.Position = UDim2.new(
-				circleStartPosition.X.Scale,
-				circleStartPosition.X.Offset + delta.X,
-				circleStartPosition.Y.Scale,
-				circleStartPosition.Y.Offset + delta.Y
-			)
-		end)
-
-		circleToggle.Activated:Connect(function()
-			if not circleMoved then ToggleMenu() end
-		end)
+		WindowFunctions._ClampCircleToggle = bindOverlayDrag(circleToggle, "circle", ToggleMenu)
 		circleToggle.MouseEnter:Connect(function()
-			TweenService:Create(circleToggle, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
-				Size = UDim2.fromOffset(49, 49),
-			}):Play()
+			ThemeEditor.animate(appearance, circleStroke, TweenInfo.new(0.13), {Thickness = 3, Transparency = 0})
+			ThemeEditor.animate(appearance, circleIcon, TweenInfo.new(0.13), {Size = UDim2.fromScale(0.83, 0.83)})
 		end)
 		circleToggle.MouseLeave:Connect(function()
-			TweenService:Create(circleToggle, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
-				Size = UDim2.fromOffset(46, 46),
-			}):Play()
+			ThemeEditor.animate(appearance, circleStroke, TweenInfo.new(0.13), {Thickness = 2, Transparency = 0.14})
+			ThemeEditor.animate(appearance, circleIcon, TweenInfo.new(0.13), {Size = UDim2.fromScale(0.77, 0.77)})
 		end)
-		compactGui.Destroying:Connect(function()
-			if circleInputConnection then circleInputConnection:Disconnect() end
-		end)
-		WindowFunctions._ClampCircleToggle = clampCircleToggle
 		WindowFunctions.LogoToggleButton = circleToggle
 
-		compactBar = Instance.new("CanvasGroup")
-		compactBar.Name = "CompactTopbar"
-		compactBar.Active = true
-		compactBar.AnchorPoint = Vector2.new(0.5, 0)
-		compactBar.BackgroundColor3 = theme.base
-		compactBar.BackgroundTransparency = acrylicBlur and theme.baseTrans or 0
-		compactBar.BorderSizePixel = 0
-		compactBar.Position = UDim2.new(0.5, 0, 0, 14)
-		compactBar.Size = UDim2.fromOffset(440, 44)
-		compactBar.Visible = false
-		compactBar.ZIndex = 10000
-		compactBar.Parent = compactGui
+		local compactBar = ThemeEditor.frame(compactGui, "Watermark", 9)
+		compactBar.Position = UDim2.fromOffset(14, 12)
+		compactBar.Size = UDim2.new(1, -28, 0, 36)
+		local widthLimit = Instance.new("UISizeConstraint")
+		widthLimit.MaxSize = Vector2.new(270, 36)
+		widthLimit.Parent = compactBar
+		bindOverlayDrag(compactBar, "watermark")
+		local border = Instance.new("UIStroke")
+		border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		border.Parent = compactBar
+		local watermarkIcon = circleIcon:Clone()
+		watermarkIcon.Position = UDim2.new(0, 18, 0.5, 0)
+		watermarkIcon.Size = UDim2.fromOffset(24, 24)
+		watermarkIcon.Parent = compactBar
+		appearance.watermarkIcon = watermarkIcon
 
-		compactScale = Instance.new("UIScale")
-		compactScale.Name = "CompactScale"
-		compactScale.Scale = 1
-		compactScale.Parent = compactBar
-		_compactBlurCleanup = BindAcrylicTarget(compactBar)
-
-		if type(_loadedCompactPosition) == "table" then
-			compactBar.Position = UDim2.new(
-				tonumber(_loadedCompactPosition.xScale) or 0.5,
-				tonumber(_loadedCompactPosition.xOffset) or 0,
-				tonumber(_loadedCompactPosition.yScale) or 0,
-				tonumber(_loadedCompactPosition.yOffset) or 14
-			)
+		local function label(text, left, width, bold)
+			local item = Instance.new("TextLabel")
+			item.BackgroundTransparency = 1
+			item.Position = UDim2.fromOffset(left, 0)
+			item.Size = width
+			item.Text = text
+			item.FontFace = Font.new(assets.interFont, bold and Enum.FontWeight.Bold or Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+			item.TextSize = bold and 14 or 12
+			item.TextXAlignment = Enum.TextXAlignment.Left
+			item.TextTruncate = Enum.TextTruncate.AtEnd
+			item.Parent = compactBar
+			return item
 		end
 
-		local compactCorner = Instance.new("UICorner")
-		compactCorner.CornerRadius = UDim.new(0, 11)
-		compactCorner.Parent = compactBar
+		local brand = label("LixHub", 38, UDim2.fromOffset(58, 36), true)
+		local stats = label("-- FPS  ·  -- ms", 104, UDim2.new(1, -112, 0, 36), false)
+		local separator = ThemeEditor.frame(compactBar, "Divider", 1)
+		separator.Position = UDim2.fromOffset(96, 9)
+		separator.Size = UDim2.fromOffset(1, 18)
 
-		local compactShadow = Instance.new("ImageLabel")
-		compactShadow.Name = "Shadow"
-		compactShadow.BackgroundTransparency = 1
-		compactShadow.Position = UDim2.new(0, -14, 0, -14)
-		compactShadow.Size = UDim2.new(1, 28, 1, 28)
-		compactShadow.Image = "rbxassetid://6014261993"
-		compactShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-		compactShadow.ImageTransparency = 0.38
-		compactShadow.ScaleType = Enum.ScaleType.Slice
-		compactShadow.SliceCenter = Rect.new(49, 49, 450, 450)
-		compactShadow.ZIndex = compactBar.ZIndex - 1
-		compactShadow.Parent = compactBar
-
-		local compactStroke = Instance.new("UIStroke")
-		compactStroke.Name = "CompactStroke"
-		compactStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		compactStroke.Color = theme.stroke
-		compactStroke.Transparency = math.min((theme.strokeTrans or 0.8) + 0.08, 0.92)
-		compactStroke.Parent = compactBar
-
-		local function makeCompactLabel(name, text, textSize, weight)
-			local label = Instance.new("TextLabel")
-			label.Name = name
-			label.BackgroundTransparency = 1
-			label.FontFace = Font.new(assets.interFont, weight or Enum.FontWeight.Medium, Enum.FontStyle.Normal)
-			label.Text = text
-			label.TextColor3 = Color3.fromRGB(235, 235, 240)
-			label.TextSize = textSize or 13
-			label.TextTruncate = Enum.TextTruncate.AtEnd
-			label.TextXAlignment = Enum.TextXAlignment.Left
-			label.ZIndex = compactBar.ZIndex + 2
-			label.Parent = compactBar
-			return label
+		appearance.paintOverlay = function()
+			local palette = appearance.palette
+			local blends = theme.gradients ~= false
+			circleToggle.BackgroundColor3 = palette.sidebar
+			circleStroke.Color = blends and ThemeEditor.white or palette.accent
+			ring.Color = ColorSequence.new(palette.accent, palette.accentEnd)
+			ring.Enabled = blends
+			compactBar.BackgroundColor3 = palette.sidebar
+			compactBar.BackgroundTransparency = acrylicBlur and 0.23 or 0.06
+			border.Color = palette.accent
+			border.Transparency = 0.52
+			separator.BackgroundColor3 = palette.line
+			brand.TextColor3 = palette.ink
+			stats.TextColor3 = palette.ink:Lerp(palette.sidebar, 0.25)
 		end
 
-		local fpsDot = Instance.new("Frame")
-		fpsDot.Name = "FPSDot"
-		fpsDot.AnchorPoint = Vector2.new(0, 0.5)
-		fpsDot.BackgroundColor3 = Color3.fromRGB(75, 220, 120)
-		fpsDot.BorderSizePixel = 0
-		fpsDot.Position = UDim2.new(0, 10, 0.5, 0)
-		fpsDot.Size = UDim2.fromOffset(9, 9)
-		fpsDot.ZIndex = compactBar.ZIndex + 2
-		fpsDot.Parent = compactBar
-		local fpsDotCorner = Instance.new("UICorner")
-		fpsDotCorner.CornerRadius = UDim.new(1, 0)
-		fpsDotCorner.Parent = fpsDot
-
-		local fpsLabel = makeCompactLabel("FPS", "-- FPS", 12, Enum.FontWeight.SemiBold)
-		fpsLabel.Position = UDim2.new(0, 24, 0, 0)
-		fpsLabel.Size = UDim2.fromOffset(48, 44)
-
-		local dividerOne = Instance.new("Frame")
-		dividerOne.Name = "Divider"
-		dividerOne.AnchorPoint = Vector2.new(0, 0.5)
-		dividerOne.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		dividerOne.BackgroundTransparency = 0.86
-		dividerOne.BorderSizePixel = 0
-		dividerOne.Position = UDim2.new(0, 76, 0.5, 0)
-		dividerOne.Size = UDim2.fromOffset(1, 20)
-		dividerOne.ZIndex = compactBar.ZIndex + 2
-		dividerOne.Parent = compactBar
-
-		local avatar = Instance.new("ImageLabel")
-		avatar.Name = "Avatar"
-		avatar.AnchorPoint = Vector2.new(0, 0.5)
-		avatar.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-		avatar.BorderSizePixel = 0
-		avatar.Position = UDim2.new(0, 86, 0.5, 0)
-		avatar.Size = UDim2.fromOffset(26, 26)
-		avatar.ZIndex = compactBar.ZIndex + 2
-		avatar.Parent = compactBar
-		local avatarCorner = Instance.new("UICorner")
-		avatarCorner.CornerRadius = UDim.new(1, 0)
-		avatarCorner.Parent = avatar
-
-		local userLabel = makeCompactLabel("Username", "@" .. tostring(LocalPlayer.Name), 12, Enum.FontWeight.Medium)
-		local dividerTwo = dividerOne:Clone()
-		dividerTwo.Name = "Divider2"
-		dividerTwo.Parent = compactBar
-		local gameLabel = makeCompactLabel("Game", tostring(Settings.Title or "LixHub"), 12, Enum.FontWeight.SemiBold)
-
-		local eyeButton = Instance.new("ImageButton")
-		eyeButton.Name = "Restore"
-		eyeButton.AnchorPoint = Vector2.new(1, 0.5)
-		eyeButton.AutoButtonColor = false
-		eyeButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		eyeButton.BackgroundTransparency = 0.94
-		eyeButton.BorderSizePixel = 0
-		eyeButton.Position = UDim2.new(1, -7, 0.5, 0)
-		eyeButton.Size = UDim2.fromOffset(32, 30)
-		eyeButton.ImageColor3 = Color3.fromRGB(225, 225, 232)
-		eyeButton.ZIndex = compactBar.ZIndex + 3
-		eyeButton.Parent = compactBar
-		setTabIcon(eyeButton, "eye")
-		local eyeCorner = Instance.new("UICorner")
-		eyeCorner.CornerRadius = UDim.new(0, 8)
-		eyeCorner.Parent = eyeButton
-
-		updateCompactLayout = function()
-			if not compactBar or not compactBar.Parent then return end
-			local viewport = getViewportSize()
-			local width = math.floor(math.min(520, math.max(220, viewport.X - 24)))
-			compactBar.Size = UDim2.fromOffset(width, 44)
-			local userWidth = math.floor(math.clamp(width * 0.23, 56, 100))
-			userLabel.Position = UDim2.new(0, 119, 0, 0)
-			userLabel.Size = UDim2.fromOffset(userWidth, 44)
-			local dividerX = 125 + userWidth
-			dividerTwo.Position = UDim2.new(0, dividerX, 0.5, 0)
-			gameLabel.Position = UDim2.new(0, dividerX + 10, 0, 0)
-			gameLabel.Size = UDim2.new(1, -(dividerX + 54), 0, 44)
-		end
-
-		clampCompactBar = function()
-			if not compactBar or not compactBar.Parent then return end
-			local viewport = getViewportSize()
-			local size = compactBar.AbsoluteSize
-			local currentCenterX = compactBar.AbsolutePosition.X + size.X / 2
-			local currentTop = compactBar.AbsolutePosition.Y
-			if currentCenterX == 0 then currentCenterX = viewport.X / 2 end
-			local margin = 8
-			local minX, maxX = size.X / 2 + margin, viewport.X - size.X / 2 - margin
-			local x = minX > maxX and viewport.X / 2 or math.clamp(currentCenterX, minX, maxX)
-			local y = math.clamp(currentTop, margin, math.max(margin, viewport.Y - size.Y - margin))
-			compactBar.Position = UDim2.fromOffset(x, y)
-		end
-
-		updateCompactLayout()
-		task.defer(clampCompactBar)
-
-		task.spawn(function()
-			local ok, image = pcall(
-				Players.GetUserThumbnailAsync,
-				Players,
-				LocalPlayer.UserId,
-				Enum.ThumbnailType.HeadShot,
-				Enum.ThumbnailSize.Size48x48
-			)
-			if ok and avatar.Parent then avatar.Image = image end
-		end)
-
-		local frames, elapsed = 0, 0
-		_compactFPSConnection = RunService.RenderStepped:Connect(function(deltaTime)
-			frames = frames + 1
-			elapsed = elapsed + deltaTime
-			if elapsed < 0.5 then return end
-			local fps = math.floor(frames / math.max(elapsed, 0.001) + 0.5)
-			fpsLabel.Text = tostring(fps) .. " FPS"
-			fpsDot.BackgroundColor3 = fps >= 50 and Color3.fromRGB(75, 220, 120)
-				or (fps >= 30 and Color3.fromRGB(245, 190, 70) or Color3.fromRGB(245, 80, 90))
-			frames, elapsed = 0, 0
-		end)
-
-		local dragging = false
-		local dragStart
-		local startPosition
-		compactBar.InputBegan:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-			dragging = true
-			dragStart = input.Position
-			startPosition = compactBar.Position
-			input.Changed:Connect(function()
-				if input.UserInputState ~= Enum.UserInputState.End then return end
-				dragging = false
-				task.defer(function()
-					clampCompactBar()
-					SaveGlobalUISettings()
-				end)
+		local sample
+		appearance.showWatermark = function()
+			compactBar.Visible = appearance.watermark == true
+			if sample then
+				sample:Disconnect()
+				sample = nil
+			end
+			if not compactBar.Visible then return end
+			local frames, elapsed = 0, 0
+			sample = RunService.RenderStepped:Connect(function(deltaTime)
+				frames += 1
+				elapsed += deltaTime
+				if elapsed < 0.5 then return end
+				local fps = math.round(frames / elapsed)
+				local ok, ping = pcall(LocalPlayer.GetNetworkPing, LocalPlayer)
+				local latency = ok and type(ping) == "number" and tostring(math.round(ping * 1000)) or "--"
+				local time = DateTime.now():FormatLocalTime("HH:mm", "en-us")
+				stats.Text = string.format("%d FPS  ·  %s ms  ·  %s", fps, latency, time)
+				frames, elapsed = 0, 0
 			end)
+		end
+		compactGui.Destroying:Connect(function()
+			if sample then sample:Disconnect() end
 		end)
-
-		_compactInputConnection = UserInputService.InputChanged:Connect(function(input)
-			if not dragging then return end
-			if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-			local delta = input.Position - dragStart
-			compactBar.Position = UDim2.new(
-				startPosition.X.Scale,
-				startPosition.X.Offset + delta.X,
-				startPosition.Y.Scale,
-				startPosition.Y.Offset + delta.Y
-			)
-		end)
-
-		eyeButton.MouseButton1Click:Connect(function()
-			WindowFunctions:SetState(true)
-		end)
-		eyeButton.MouseEnter:Connect(function()
-			TweenService:Create(eyeButton, TweenInfo.new(0.15), { BackgroundTransparency = 0.86 }):Play()
-		end)
-		eyeButton.MouseLeave:Connect(function()
-			TweenService:Create(eyeButton, TweenInfo.new(0.15), { BackgroundTransparency = 0.94 }):Play()
-		end)
+		appearance.paintOverlay()
+		appearance.showWatermark()
 
 		WindowFunctions.CompactTopbarGui = compactGui
 		WindowFunctions.LogoToggleGui = compactGui
@@ -8196,9 +8962,6 @@ end]]
 		_viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			applyAutomaticScale()
 			task.defer(clampWindowToViewport)
-			if updateCompactLayout then updateCompactLayout() end
-			if clampCompactBar then task.defer(clampCompactBar) end
-			if WindowFunctions._ClampCircleToggle then task.defer(WindowFunctions._ClampCircleToggle) end
 		end)
 	end
 
