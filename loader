@@ -49,6 +49,11 @@ local scripts = {
 		ffa = false,
 		script_id = "9337ddc47d79861fb00f57784e1ed092",
 	},
+	[35139043] = {
+		name = "Anime Crusaders X",
+		ffa = false,
+		script_id = "237f8326edeeb01549c83d1205685bf7",
+	},
 }
 
 local current = scripts[game.CreatorId]
