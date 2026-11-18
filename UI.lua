@@ -4068,6 +4068,67 @@ end]]
 					return ButtonFunctions
 				end
 
+				local function bindElementDescription(element, settings)
+				    local description, padding
+				    local function update(text)
+				        text = type(text) == "string" and text or ""
+				        settings.Description = text
+				        local visible = text:find("%S") ~= nil
+				        if visible and not description then
+				            local row = Instance.new("Frame")
+				            row.Name = "ControlRow"
+				            row.BackgroundTransparency = 1
+				            row.BorderSizePixel = 0
+				            row.Size = UDim2.new(1, 0, 0, 38)
+				            row.AutomaticSize = Enum.AutomaticSize.Y
+				            row.LayoutOrder = 0
+				            for _, child in ipairs(element:GetChildren()) do
+				                if child:IsA("GuiObject") then
+				                    child.Parent = row
+				                    if child.Name == "ToggleName" or child.Name == "SliderName" then
+				                        child.AnchorPoint = Vector2.new(0, 0)
+				                        child.Position = UDim2.fromOffset(0, 11)
+				                    elseif child.Name == "Toggle" then
+				                        child.Position = UDim2.new(1, 0, 0, 19)
+				                    elseif child.Name == "SliderElements" then
+				                        child.Size = UDim2.new(1, 0, 0, 38)
+				                    end
+				                end
+				            end
+				            row.Parent = element
+				            local layout = Instance.new("UIListLayout")
+				            layout.FillDirection = Enum.FillDirection.Vertical
+				            layout.SortOrder = Enum.SortOrder.LayoutOrder
+				            layout.Parent = element
+				            padding = Instance.new("UIPadding")
+				            padding.Name = "DescriptionPadding"
+				            padding.Parent = element
+				            description = Instance.new("TextLabel")
+				            description.Name = "ElementDescription"
+				            description.BackgroundTransparency = 1
+				            description.BorderSizePixel = 0
+				            description.FontFace = Font.new(assets.interFont)
+				            description.TextSize = 12
+				            description.TextColor3 = Color3.fromRGB(155, 155, 155)
+				            description.TextTransparency = 0.05
+				            description.TextWrapped = true
+				            description.TextXAlignment = Enum.TextXAlignment.Left
+				            description.TextYAlignment = Enum.TextYAlignment.Top
+				            description.AutomaticSize = Enum.AutomaticSize.Y
+				            description.Size = UDim2.new(1, 0, 0, 0)
+				            description.LayoutOrder = 1
+				            description.Parent = element
+				        end
+				        if description then
+				            description.Text = text
+				            description.Visible = visible
+				            padding.PaddingBottom = UDim.new(0, visible and 6 or 0)
+				        end
+				    end
+				    update(settings.Description)
+				    return update
+				end
+
 				function SectionFunctions:Toggle(Settings, Flag)
 					local ToggleFunctions = { Settings = Settings, IgnoreConfig = false, Class = "Toggle" }
 					local toggle = Instance.new("Frame")
@@ -4210,6 +4271,9 @@ end]]
 					function ToggleFunctions:SetVisibility(State)
 						toggle.Visible = State
 					end
+
+					local updateDescription = bindElementDescription(toggle, ToggleFunctions.Settings)
+					function ToggleFunctions:UpdateDescription(text) updateDescription(text) end
 
 					registerElement(Settings.Name, toggle)
 
@@ -4483,7 +4547,7 @@ end]]
 					section:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSliderBarSize)
 
 					function SliderFunctions:UpdateName(Name)
-						sliderName = Name
+						sliderName.Text = Name
 					end
 					function SliderFunctions:SetVisibility(State)
 						slider.Visible = State
@@ -4494,6 +4558,9 @@ end]]
 					function SliderFunctions:GetValue()
 						return finalValue
 					end
+
+					local updateDescription = bindElementDescription(slider, SliderFunctions.Settings)
+					function SliderFunctions:UpdateDescription(text) updateDescription(text) end
 
 					registerElement(Settings.Name, slider)
 
