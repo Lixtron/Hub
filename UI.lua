@@ -3795,7 +3795,7 @@ end]]
 
 			tabContext.scrollFrame = elementsScrolling
 
-			function TabFunctions:Section(Settings)
+			function TabFunctions:Section(Settings, parentSection)
 				Settings = Settings or {}
 				local SectionFunctions = { Settings = Settings }
 				local sectionTitle = tostring(Settings.Name or Settings.Title or "Section")
@@ -3811,7 +3811,9 @@ end]]
 				sectionOuter.ClipsDescendants = true
 				ThemeEditor.bind(appearance, sectionOuter, "panel")
 
-				if Settings.Side == "Left" then
+				if parentSection then
+					sectionOuter.Parent = parentSection.content
+				elseif Settings.Side == "Left" then
 					sectionOuter.Parent = left
 				elseif Settings.Side == "Right" then
 					sectionOuter.Parent = right
@@ -3958,6 +3960,16 @@ end]]
 
 				if Settings.ThemePreview then ThemeEditor.createSample(appearance, section) end
 
+				local function revealSection()
+					local ancestor = parentSection and parentSection.reveal and parentSection.reveal() or false
+					local own = revealForSearch and revealForSearch() or false
+					return ancestor or own
+				end
+
+				function SectionFunctions:Section(childSettings)
+					return TabFunctions:Section(childSettings, {content = section, reveal = revealSection})
+				end
+
 				local function registerElement(name, element)
 					if not name or name == "" then return end
 					table.insert(searchRegistry, {
@@ -3966,7 +3978,7 @@ end]]
 						element = element,
 						tabSelectFunc = function() if tabContext.selectFunc then tabContext.selectFunc() end end,
 						scrollFrame = tabContext.scrollFrame,
-						revealFunc = revealForSearch,
+						revealFunc = revealSection,
 					})
 				end
 
