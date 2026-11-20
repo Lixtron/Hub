@@ -15,6 +15,46 @@ local MacLib = {
 	end
 }
 
+-- UI signals can resume in the thread that refreshed a control's options.
+-- Keep this library's callbacks in UI context without changing Roblox's globals.
+local UIThread = {
+	get = getthreadidentity or get_thread_identity or getidentity or (syn and syn.get_thread_identity),
+	set = setthreadidentity or set_thread_identity or setidentity or (syn and syn.set_thread_identity),
+}
+function UIThread.callback(callback)
+	if type(callback) ~= "function" then return callback end
+	return function(...)
+		local previous, changed
+		if type(UIThread.get) == "function" and type(UIThread.set) == "function" then
+			local ok, identity = pcall(UIThread.get)
+			if ok and type(identity) == "number" then
+				previous = identity
+				if identity ~= 8 then
+					local set, reason = pcall(UIThread.set, 8)
+					if not set then error("UI context unavailable: " .. tostring(reason), 0) end
+					changed = true
+				end
+			end
+		end
+		local result = table.pack(xpcall(callback, function(reason)
+			return debug and type(debug.traceback) == "function" and debug.traceback(tostring(reason), 2) or tostring(reason)
+		end, ...))
+		if changed then
+			local restored, reason = pcall(UIThread.set, previous)
+			if not restored then error("Could not restore UI thread context: " .. tostring(reason), 0) end
+		end
+		if not result[1] then error(result[2], 0) end
+		return table.unpack(result, 2, result.n)
+	end
+end
+
+local nativeTask = task
+local task = setmetatable({
+	spawn = function(callback, ...) return nativeTask.spawn(UIThread.callback(callback), ...) end,
+	defer = function(callback, ...) return nativeTask.defer(UIThread.callback(callback), ...) end,
+	delay = function(seconds, callback, ...) return nativeTask.delay(seconds, UIThread.callback(callback), ...) end,
+}, {__index = nativeTask})
+
 local TweenService = MacLib.GetService("TweenService")
 local RunService = MacLib.GetService("RunService")
 local HttpService = MacLib.GetService("HttpService")
@@ -373,13 +413,13 @@ local function GetGui()
 		task.wait(0.1)
 	end
 
-	newGui:GetPropertyChangedSignal("Parent"):Connect(function()
+	newGui:GetPropertyChangedSignal("Parent"):Connect(UIThread.callback(function()
 		if newGui.Parent == nil and not unloaded then
 			for _, candidate in ipairs(parentCandidates) do
 				if trySetParent(candidate[2]) then break end
 			end
 		end
-	end)
+	end))
 
 	return newGui
 end
@@ -658,9 +698,9 @@ function ThemeEditor.preloadImage(source, isCurrent, callback, parent)
 				end
 			end
 
-			loadedConnection = candidate:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+			loadedConnection = candidate:GetPropertyChangedSignal("IsLoaded"):Connect(UIThread.callback(function()
 				if candidate.IsLoaded then settle(true) end
-			end)
+			end))
 			task.delay(5, function()
 				if active then settle(candidate.IsLoaded) end
 			end)
@@ -903,24 +943,24 @@ function ThemeEditor.motion(state, button, surface, kind, press)
 	button.AutoButtonColor = false
 	if kind then
 		ThemeEditor.bind(state, surface, kind)
-		button.MouseEnter:Connect(function()
+		button.MouseEnter:Connect(UIThread.callback(function()
 			state.hovered[surface] = true
 			ThemeEditor.style(state, surface, kind, true)
-		end)
-		button.MouseLeave:Connect(function()
+		end))
+		button.MouseLeave:Connect(UIThread.callback(function()
 			state.hovered[surface] = nil
 			ThemeEditor.style(state, surface, kind, true)
-		end)
+		end))
 	end
 	if not press then return end
 
 	local scale = Instance.new("UIScale")
 	scale.Parent = surface
-	button.Activated:Connect(function()
+	button.Activated:Connect(UIThread.callback(function()
 		if state.reduceMotion then return end
 		scale.Scale = 0.97
 		Tween(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quart), {Scale = 1}):Play()
-	end)
+	end))
 end
 
 function ThemeEditor.frame(parent, name, radius)
@@ -1168,7 +1208,7 @@ function ThemeEditor.updateWeatherAnimation(state)
 
 	if weather.render then return end
 	local elapsed = 0
-	weather.render = RunService.RenderStepped:Connect(function(dt)
+	weather.render = RunService.RenderStepped:Connect(UIThread.callback(function(dt)
 		elapsed += dt
 		if elapsed < 1 / 30 then return end
 		local step = math.min(elapsed, 0.1)
@@ -1185,7 +1225,7 @@ function ThemeEditor.updateWeatherAnimation(state)
 			local sway = rain and 0 or math.sin(particle.y * 8 + particle.variance * 6.28) * 0.035
 			particle.gui.Position = UDim2.fromScale(particle.x + sway, particle.y)
 		end
-	end)
+	end))
 end
 
 function ThemeEditor.applyWeatherIcon(state, source, report)
@@ -1308,7 +1348,7 @@ function ThemeEditor.addDiscordFooter(state, parent)
 	end
 
 	local status = false
-	button.Activated:Connect(function()
+	button.Activated:Connect(UIThread.callback(function()
 		if status then return end
 		status = true
 		local clipboard = type(setclipboard) == "function" and setclipboard or toclipboard
@@ -1319,7 +1359,7 @@ function ThemeEditor.addDiscordFooter(state, parent)
 			label.Text = "Discord Invite"
 			status = false
 		end)
-	end)
+	end))
 end
 
 function ThemeEditor.resizeDimensions(viewport, origin, scale, startSize, delta)
@@ -1379,7 +1419,7 @@ function ThemeEditor.addResizeGrip(state, base, getViewport, applySize, save)
 		if previous.target then save() end
 	end
 
-	grip.InputBegan:Connect(function(input)
+	grip.InputBegan:Connect(UIThread.callback(function(input)
 		local kind = input.UserInputType
 		if drag or (kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch) then return end
 		local scale = base.BaseUIScale.Scale
@@ -1394,15 +1434,15 @@ function ThemeEditor.addResizeGrip(state, base, getViewport, applySize, save)
 		}
 		state.resizing = true
 		ThemeEditor.updateWeatherAnimation(state)
-	end)
-	local moved = UserInputService.InputChanged:Connect(function(input)
+	end))
+	local moved = UserInputService.InputChanged:Connect(UIThread.callback(function(input)
 		if not drag then return end
 		if drag.touch and input ~= drag.input then return end
 		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
 		drag.pointer = input.Position
-		if not drag.render then drag.render = RunService.RenderStepped:Connect(update) end
-	end)
-	local ended = UserInputService.InputEnded:Connect(function(input)
+		if not drag.render then drag.render = RunService.RenderStepped:Connect(UIThread.callback(update)) end
+	end))
+	local ended = UserInputService.InputEnded:Connect(UIThread.callback(function(input)
 		if not drag then return end
 		if drag.touch and input ~= drag.input then return end
 		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -1411,15 +1451,15 @@ function ThemeEditor.addResizeGrip(state, base, getViewport, applySize, save)
 			update()
 		end
 		finish()
-	end)
-	base:GetPropertyChangedSignal("Visible"):Connect(function()
+	end))
+	base:GetPropertyChangedSignal("Visible"):Connect(UIThread.callback(function()
 		if not base.Visible then finish() end
-	end)
-	base.Destroying:Connect(function()
+	end))
+	base.Destroying:Connect(UIThread.callback(function()
 		if drag and drag.render then drag.render:Disconnect() end
 		moved:Disconnect()
 		ended:Disconnect()
-	end)
+	end))
 end
 
 function ThemeEditor.dragOverlay(root, widget, save, activate)
@@ -1447,7 +1487,7 @@ function ThemeEditor.dragOverlay(root, widget, save, activate)
 
 	local drag, touchPress
 	local suppressClick = false
-	widget.InputBegan:Connect(function(input)
+	widget.InputBegan:Connect(UIThread.callback(function(input)
 		local kind = input.UserInputType
 		if drag or (kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch) then return end
 		drag = {
@@ -1458,8 +1498,8 @@ function ThemeEditor.dragOverlay(root, widget, save, activate)
 		}
 		touchPress = drag.touch and input or nil
 		suppressClick = false
-	end)
-	local moved = UserInputService.InputChanged:Connect(function(input)
+	end))
+	local moved = UserInputService.InputChanged:Connect(UIThread.callback(function(input)
 		if not drag or not widget.Visible then return end
 		if drag.touch and input ~= drag.input then return end
 		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
@@ -1467,8 +1507,8 @@ function ThemeEditor.dragOverlay(root, widget, save, activate)
 		if not suppressClick and delta.Magnitude < 5 then return end
 		suppressClick = true
 		place(drag.position.X.Offset + delta.X, drag.position.Y.Offset + delta.Y)
-	end)
-	local ended = UserInputService.InputEnded:Connect(function(input)
+	end))
+	local ended = UserInputService.InputEnded:Connect(UIThread.callback(function(input)
 		if not drag then return end
 		if drag.touch and input ~= drag.input then return end
 		if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -1478,23 +1518,23 @@ function ThemeEditor.dragOverlay(root, widget, save, activate)
 		if suppressClick and position ~= start then
 			save(position.X.Offset, position.Y.Offset)
 		end
-	end)
+	end))
 
 	if activate then
-		widget.Activated:Connect(function(input)
+		widget.Activated:Connect(UIThread.callback(function(input)
 			local kind = input.UserInputType
 			if kind == Enum.UserInputType.Touch and input ~= touchPress then return end
 			local pointer = kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch
 			if not pointer or not suppressClick then activate() end
-		end)
+		end))
 	end
-	local changed = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp)
-	widget:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp)
-	widget.Destroying:Connect(function()
+	local changed = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(clamp))
+	widget:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(clamp))
+	widget.Destroying:Connect(UIThread.callback(function()
 		moved:Disconnect()
 		ended:Disconnect()
 		changed:Disconnect()
-	end)
+	end))
 	task.defer(clamp)
 	return clamp
 end
@@ -1594,8 +1634,8 @@ function ThemeEditor.bind(state, object, kind)
 		local function refresh()
 			ThemeEditor.style(state, object, kind, true)
 		end
-		object.Focused:Connect(refresh)
-		object.FocusLost:Connect(refresh)
+		object.Focused:Connect(UIThread.callback(refresh))
+		object.FocusLost:Connect(UIThread.callback(refresh))
 	end
 end
 
@@ -1656,30 +1696,30 @@ function ThemeEditor.create(base, theme, root)
 		hovered = setmetatable({}, {__mode = "k"}),
 		transitions = setmetatable({}, {__mode = "kv"}),
 	}
-	root.DescendantAdded:Connect(function(object)
+	root.DescendantAdded:Connect(UIThread.callback(function(object)
 		ThemeEditor.trackText(state, object)
-	end)
-	root.DescendantRemoving:Connect(function(object)
+	end))
+	root.DescendantRemoving:Connect(UIThread.callback(function(object)
 		state.styles[object] = nil
 		state.hovered[object] = nil
 		local transition = state.transitions[object]
 		if transition then transition:Cancel() end
 		state.transitions[object] = nil
-	end)
+	end))
 	local function updateWeather()
 		ThemeEditor.updateWeatherAnimation(state)
 	end
-	base:GetPropertyChangedSignal("Visible"):Connect(updateWeather)
+	base:GetPropertyChangedSignal("Visible"):Connect(UIThread.callback(updateWeather))
 	if state.weather.screen then
-		state.weather.screen:GetPropertyChangedSignal("Enabled"):Connect(updateWeather)
+		state.weather.screen:GetPropertyChangedSignal("Enabled"):Connect(UIThread.callback(updateWeather))
 	end
-	base.Destroying:Connect(function()
+	base.Destroying:Connect(UIThread.callback(function()
 		state.weather.disposed = true
 		if state.weather.render then
 			state.weather.render:Disconnect()
 			state.weather.render = nil
 		end
-	end)
+	end))
 	ThemeEditor.updateBackdrop(state, ThemeEditor.makeDraft(theme))
 	ThemeEditor.applyWallpaper(state, theme.wallpaper)
 	ThemeEditor.applyIcon(state, theme.icon)
@@ -2117,12 +2157,12 @@ end]]
 		local cg
 		pcall(function() cg = game:GetService("CoreGui") end)
 		if not cg then return end
-		_autoRejoinConn = cg.DescendantAdded:Connect(function(desc)
+		_autoRejoinConn = cg.DescendantAdded:Connect(UIThread.callback(function(desc)
 			if desc.Name == "ErrorPrompt" and _autoRejoinEnabled then
 				task.wait(0.15)
 				task.spawn(_doRejoin)
 			end
-		end)
+		end))
 	end
 
 	local theme = resolveTheme(Settings)
@@ -2522,27 +2562,27 @@ end]]
 		}):Play()
 	end
 
-	dividerInteract.MouseEnter:Connect(function()
+	dividerInteract.MouseEnter:Connect(UIThread.callback(function()
 		ChangeState("Hover")
-	end)
-	dividerInteract.MouseLeave:Connect(function()
+	end))
+	dividerInteract.MouseLeave:Connect(UIThread.callback(function()
 		ChangeState("Idle")
-	end)
+	end))
 
-	dividerInteract.MouseButton1Down:Connect(function()
+	dividerInteract.MouseButton1Down:Connect(UIThread.callback(function()
 		resizingContent = true
 		initialMouseX = UserInputService:GetMouseLocation().X
 		initialSidebarWidth = sidebar.AbsoluteSize.X
-	end)
+	end))
 
-	UserInputService.InputEnded:Connect(function(input)
+	UserInputService.InputEnded:Connect(UIThread.callback(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 and resizingContent then
 			resizingContent = false
 			if appearance.sidebarRatio and appearance.persistUI then appearance.persistUI() end
 		end
-	end)
+	end))
 
-	UserInputService.InputChanged:Connect(function(input)
+	UserInputService.InputChanged:Connect(UIThread.callback(function(input)
 		if resizingContent and input.UserInputType == Enum.UserInputType.MouseMovement then
 			if type(initialMouseX) ~= "number" or type(initialSidebarWidth) ~= "number" then
 				resizingContent = false
@@ -2559,7 +2599,7 @@ end]]
 			sidebar.Size = UDim2.fromScale(ratio, 1)
 			content.Size = UDim2.fromScale(1 - ratio, 1)
 		end
-	end)
+	end))
 
 	local topbar = Instance.new("Frame")
 	topbar.Name = "Topbar"
@@ -2635,12 +2675,12 @@ end]]
 		end
 	end
 
-	interact.MouseEnter:Connect(function()
+	interact.MouseEnter:Connect(UIThread.callback(function()
 		ChangemoveIconState("Hover")
-	end)
-	interact.MouseLeave:Connect(function()
+	end))
+	interact.MouseLeave:Connect(UIThread.callback(function()
 		ChangemoveIconState("Default")
-	end)
+	end))
 
 	do
 		local moveHandle = Settings.DragStyle == 1 and interact or base
@@ -2667,13 +2707,13 @@ end]]
 			drag = {input = input, touch = touch, start = point, position = base.Position}
 		end
 
-		moveHandle.InputBegan:Connect(startDrag)
+		moveHandle.InputBegan:Connect(UIThread.callback(startDrag))
 		if moveHandle ~= base then
-			base.InputBegan:Connect(function(input)
+			base.InputBegan:Connect(UIThread.callback(function(input)
 				if input.UserInputType == Enum.UserInputType.Touch then startDrag(input) end
-			end)
+			end))
 		end
-		local moved = UserInputService.InputChanged:Connect(function(input)
+		local moved = UserInputService.InputChanged:Connect(UIThread.callback(function(input)
 			if not drag or appearance.resizing or not base.Visible then return end
 			if drag.touch and input ~= drag.input then return end
 			if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
@@ -2682,8 +2722,8 @@ end]]
 			drag.moved = true
 			local start = drag.position
 			base.Position = UDim2.new(start.X.Scale, start.X.Offset + delta.X, start.Y.Scale, start.Y.Offset + delta.Y)
-		end)
-		local ended = UserInputService.InputEnded:Connect(function(input)
+		end))
+		local ended = UserInputService.InputEnded:Connect(UIThread.callback(function(input)
 			if not drag then return end
 			if drag.touch and input ~= drag.input then return end
 			if not drag.touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -2697,14 +2737,14 @@ end]]
 					if appearance.persistUI then appearance.persistUI() end
 				end)
 			end
-		end)
-		base:GetPropertyChangedSignal("Visible"):Connect(function()
+		end))
+		base:GetPropertyChangedSignal("Visible"):Connect(UIThread.callback(function()
 			if not base.Visible then drag = nil end
-		end)
-		base.Destroying:Connect(function()
+		end))
+		base.Destroying:Connect(UIThread.callback(function()
 			moved:Disconnect()
 			ended:Disconnect()
-		end)
+		end))
 	end
 
 	local currentTab = Instance.new("TextLabel")
@@ -2780,12 +2820,12 @@ end]]
 	searchInput.Size = UDim2.new(1, -33, 1, 0)
 	searchInput.Parent = searchContainer
 	ThemeEditor.bind(appearance, searchInput, "text")
-	searchInput.Focused:Connect(function()
+	searchInput.Focused:Connect(UIThread.callback(function()
 		searchContainerUIStroke.Color = appearance.palette.accent
-	end)
-	searchInput.FocusLost:Connect(function()
+	end))
+	searchInput.FocusLost:Connect(UIThread.callback(function()
 		searchContainerUIStroke.Color = appearance.palette.line
-	end)
+	end))
 
 	local searchResults = Instance.new("Frame")
 	searchResults.Name = "SearchResults"
@@ -2970,23 +3010,23 @@ end]]
 			label.ZIndex = 51
 			label.Parent = btn
 
-			btn.MouseEnter:Connect(function()
+			btn.MouseEnter:Connect(UIThread.callback(function()
 				label.TextTransparency = 0.02
 				btn.BackgroundTransparency = 0.9
-			end)
-			btn.MouseLeave:Connect(function()
+			end))
+			btn.MouseLeave:Connect(UIThread.callback(function()
 				label.TextTransparency = 0.35
 				btn.BackgroundTransparency = 1
-			end)
+			end))
 
 			local clicked = false
-			btn.InputBegan:Connect(function(input)
+			btn.InputBegan:Connect(UIThread.callback(function(input)
 				if clicked then return end
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					clicked = true
 					navigateTo(entry)
 				end
-			end)
+			end))
 
 			btn.Parent = searchResults
 		end
@@ -2996,24 +3036,24 @@ end]]
 
 	local searchFocused = false
 
-	searchInput:GetPropertyChangedSignal("Text"):Connect(function()
+	searchInput:GetPropertyChangedSignal("Text"):Connect(UIThread.callback(function()
 		runSearch(searchInput.Text)
-	end)
+	end))
 
-	searchInput.Focused:Connect(function()
+	searchInput.Focused:Connect(UIThread.callback(function()
 		searchFocused = true
 		if searchInput.Text ~= "" then
 			runSearch(searchInput.Text)
 		end
-	end)
+	end))
 
-	searchInput.FocusLost:Connect(function()
+	searchInput.FocusLost:Connect(UIThread.callback(function()
 		searchFocused = false
 		task.wait(0.18)
 		if not searchFocused then
 			closeResults()
 		end
-	end)
+	end))
 
 	elements.Parent = topbar
 
@@ -3084,17 +3124,17 @@ end]]
 			toggled = false
 		end
 	end
-	globalSettings.MouseEnter:Connect(function()
+	globalSettings.MouseEnter:Connect(UIThread.callback(function()
 		hovering = true
-	end)
-	globalSettings.MouseLeave:Connect(function()
+	end))
+	globalSettings.MouseLeave:Connect(UIThread.callback(function()
 		hovering = false
-	end)
-	UserInputService.InputEnded:Connect(function(inp)
+	end))
+	UserInputService.InputEnded:Connect(UIThread.callback(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 and toggled and not hovering then
 			toggle()
 		end
-	end)
+	end))
 
 	local BlurTarget = base
 
@@ -3320,13 +3360,13 @@ end]]
 	UpdateOrientation(true)
 
 	do
-		local render = RunService.RenderStepped:Connect(function() UpdateOrientation(false) end)
-		macLib.Destroying:Connect(function()
+		local render = RunService.RenderStepped:Connect(UIThread.callback(function() UpdateOrientation(false) end))
+		macLib.Destroying:Connect(UIThread.callback(function()
 			render:Disconnect()
 			for _, part in pairs(parts) do part:Destroy() end
 			DepthOfField.Enabled = false
 			DepthOfField.Parent = nil
-		end)
+		end))
 	end
 
 	function WindowFunctions:SetTheme(newTheme, wallpaperReport)
@@ -3461,32 +3501,32 @@ end]]
 			if not State then
 				tweens.checkOut:Play()
 				tweens.nameOut:Play()
-				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(function()
 					if checkmark.AbsoluteSize.X <= 0 then
 						checkmark.TextTransparency = 1
 					end
-				end)
+				end))
 			else
 				tweens.checkIn:Play()
 				tweens.nameIn:Play()
-				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(function()
 					if checkmark.AbsoluteSize.X > 0 then
 						checkmark.TextTransparency = 0
 					end
-				end)
+				end))
 			end
 		end
 
 		local toggled = Settings.Default
 		Toggle(toggled)
 
-		globalSetting.MouseButton1Click:Connect(_sd(function()
+		globalSetting.MouseButton1Click:Connect(UIThread.callback(_sd(function()
 			toggled = not toggled
 			Toggle(toggled)
 			if Settings.Callback then
 				Settings.Callback(toggled)
 			end
-		end))
+		end)))
 
 		function GlobalSettingFunctions:UpdateName(NewName)
 			settingName.Text = NewName
@@ -3639,16 +3679,16 @@ end]]
 
 			tabSwitcher.Parent = sectionTabSwitchers
 			ThemeEditor.bind(appearance, tabSwitcher, "navigation")
-			tabSwitcher.MouseEnter:Connect(function()
+			tabSwitcher.MouseEnter:Connect(UIThread.callback(function()
 				if appearance.activeTab ~= tabSwitcher then
 					ThemeEditor.animate(appearance, tabSwitcher, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundTransparency = 0.52})
 				end
-			end)
-			tabSwitcher.MouseLeave:Connect(function()
+			end))
+			tabSwitcher.MouseLeave:Connect(UIThread.callback(function()
 				if appearance.activeTab ~= tabSwitcher then
 					ThemeEditor.animate(appearance, tabSwitcher, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundTransparency = 1})
 				end
-			end)
+			end))
 
 			local elements1 = Instance.new("Frame")
 			elements1.Name = "Elements"
@@ -3927,17 +3967,17 @@ end]]
 						if not collapsed and type(Settings.OnExpand) == "function" then Settings.OnExpand() end
 					end
 
-					sectionHeader.MouseEnter:Connect(function()
+					sectionHeader.MouseEnter:Connect(UIThread.callback(function()
 						sectionHeaderTitle.TextTransparency = 0
 						sectionArrow.TextTransparency = 0.15
-					end)
-					sectionHeader.MouseLeave:Connect(function()
+					end))
+					sectionHeader.MouseLeave:Connect(UIThread.callback(function()
 						sectionHeaderTitle.TextTransparency = 0.04
 						sectionArrow.TextTransparency = 0.35
-					end)
-					sectionHeader.MouseButton1Click:Connect(function()
+					end))
+					sectionHeader.MouseButton1Click:Connect(UIThread.callback(function()
 						applyCollapsed(not collapsed, true)
-					end)
+					end))
 
 					function SectionFunctions:SetCollapsed(state)
 						applyCollapsed(state, true)
@@ -4052,7 +4092,7 @@ end]]
 						end
 					end
 
-					buttonInteract.MouseButton1Click:Connect(Callback)
+					buttonInteract.MouseButton1Click:Connect(UIThread.callback(Callback))
 					function ButtonFunctions:UpdateName(Name)
 						buttonInteract.Text = Name
 					end
@@ -4253,7 +4293,7 @@ end]]
 						NewState(togglebool, ToggleFunctions.Settings.Callback)
 					end
 
-					toggle1.MouseButton1Click:Connect(Toggle)
+					toggle1.MouseButton1Click:Connect(UIThread.callback(Toggle))
 
 					function ToggleFunctions:Toggle()
 						Toggle()
@@ -4484,23 +4524,23 @@ end]]
 
 					SetValue(SliderFunctions.Settings.Default, true)
 
-					sliderHead.InputBegan:Connect(function(input)
+					sliderHead.InputBegan:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							dragging = true
 							SetValue(input)
 						end
-					end)
+					end))
 
-					sliderHead.InputEnded:Connect(function(input)
+					sliderHead.InputEnded:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							dragging = false
 							if SliderFunctions.Settings.onInputComplete then
 								SliderFunctions.Settings.onInputComplete(finalValue)
 							end
 						end
-					end)
+					end))
 
-					sliderValue.FocusLost:Connect(function(enterPressed)
+					sliderValue.FocusLost:Connect(UIThread.callback(function(enterPressed)
 						local inputText = sliderValue.Text
 						local value, isPercent = inputText:match("^(%-?%d+%.?%d*)(%%?)$")
 
@@ -4521,13 +4561,13 @@ end]]
 						if SliderFunctions.Settings.onInputComplete then
 							SliderFunctions.Settings.onInputComplete(finalValue)
 						end
-					end)
+					end))
 
-					UserInputService.InputChanged:Connect(function(input)
+					UserInputService.InputChanged:Connect(UIThread.callback(function(input)
 						if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 							SetValue(input)
 						end
-					end)
+					end))
 
 					local function updateSliderBarSize()
 						local padding = sliderElementsUIListLayout.Padding.Offset
@@ -4543,8 +4583,8 @@ end]]
 
 					updateSliderBarSize()
 
-					sliderName:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSliderBarSize)
-					section:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSliderBarSize)
+					sliderName:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(updateSliderBarSize))
+					section:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(updateSliderBarSize))
 
 					function SliderFunctions:UpdateName(Name)
 						sliderName.Text = Name
@@ -4695,9 +4735,9 @@ end]]
 					end
 
 					checkSize()
-					InputName:GetPropertyChangedSignal("AbsoluteSize"):Connect(checkSize)
+					InputName:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(checkSize))
 
-					InputBox.FocusLost:Connect(function()
+					InputBox.FocusLost:Connect(UIThread.callback(function()
 						local inputText = InputBox.Text
 						local filteredText = AcceptedCharacters(inputText)
 						InputBox.Text = filteredText
@@ -4706,17 +4746,17 @@ end]]
 								InputFunctions.Settings.Callback(filteredText)
 							end
 						end)
-					end)
+					end))
 					InputBox.Text = InputFunctions.Settings.Default or ""
 					InputBox.PlaceholderText = InputFunctions.Settings.Placeholder or ""
 
-					InputBox:GetPropertyChangedSignal("Text"):Connect(function()
+					InputBox:GetPropertyChangedSignal("Text"):Connect(UIThread.callback(function()
 						InputBox.Text = AcceptedCharacters(InputBox.Text)
 						if InputFunctions.Settings.onChanged then
 							InputFunctions.Settings.onChanged(InputBox.Text)
 						end
 						InputFunctions.Text = InputBox.Text
-					end)
+					end))
 
 					function InputFunctions:UpdateName(Name)
 						inputName.Text = Name
@@ -4842,20 +4882,20 @@ end]]
 						binderBox.Text = binded.Name
 					end
 
-					binderBox.Focused:Connect(function()
+					binderBox.Focused:Connect(UIThread.callback(function()
 						focused = true
-					end)
+					end))
 
-					binderBox.FocusLost:Connect(function()
+					binderBox.FocusLost:Connect(UIThread.callback(function()
 						focused = false
-					end)
+					end))
 
-					UserInputService.InputBegan:Connect(function(inp)
+					UserInputService.InputBegan:Connect(UIThread.callback(function(inp)
 						if focused and not isBinding then
 							isBinding = true
 
 							local Event
-							Event = UserInputService.InputBegan:Connect(function(input)
+							Event = UserInputService.InputBegan:Connect(UIThread.callback(function(input)
 								if KeybindFunctions.Settings.Blacklist and (table.find(KeybindFunctions.KeybindFunctions.Settings.Blacklist, input.KeyCode) or table.find(KeybindFunctions.Settings.Blacklist, input.UserInputType)) then
 									binderBox:ReleaseFocus()
 									resetFocusState()
@@ -4877,7 +4917,7 @@ end]]
 								reset = true
 								resetFocusState()
 								Event:Disconnect()
-							end)
+							end))
 						else
 							if not reset and (inp.KeyCode == binded or inp.UserInputType == binded) then
 								if KeybindFunctions.Settings.Callback then
@@ -4890,9 +4930,9 @@ end]]
 								reset = false
 							end
 						end
-					end)
+					end))
 
-					UserInputService.InputEnded:Connect(function(inp)
+					UserInputService.InputEnded:Connect(UIThread.callback(function(inp)
 						if not focused and not isBinding then
 							if inp.KeyCode == binded or inp.UserInputType == binded then
 								if Settings.onBindHeld then
@@ -4900,7 +4940,7 @@ end]]
 								end
 							end
 						end
-					end)
+					end))
 
 					function KeybindFunctions:Bind(Key)
 						binded = Key
@@ -5075,7 +5115,7 @@ end]]
 							dropdown.Size = UDim2.new(1, 0, 0, h)
 						end
 					end
-					dropdownName:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHeaderLayout)
+					dropdownName:GetPropertyChangedSignal("AbsoluteSize"):Connect(UIThread.callback(updateHeaderLayout))
 					updateHeaderLayout()
 
 					local dropdownFrameUIPadding = Instance.new("UIPadding")
@@ -5175,7 +5215,7 @@ end]]
 						dropdown.Size = UDim2.new(1, 0, 0, CalculateDropdownSize())
 					end
 
-					searchBox:GetPropertyChangedSignal("Text"):Connect(findOption)
+					searchBox:GetPropertyChangedSignal("Text"):Connect(UIThread.callback(findOption))
 
 					local uIPadding1 = Instance.new("UIPadding")
 					uIPadding1.Name = "UIPadding"
@@ -5279,18 +5319,18 @@ end]]
 
 						-- Connect before playing, including when reduced motion finishes immediately.
 						local completed
-						completed = dropTween.Completed:Connect(function()
+						completed = dropTween.Completed:Connect(UIThread.callback(function()
 							if completed then completed:Disconnect() end
 							if not isDropdownOpen then dropdownFrame.Visible = false end
 							db = false
-						end)
+						end))
 						dropped = isDropdownOpen
 						if isDropdownOpen then dropdownFrame.Visible = true end
 						dropTween:Play()
 						iconTween:Play()
 					end
 
-					interact.Activated:Connect(ToggleDropdown)
+					interact.Activated:Connect(UIThread.callback(ToggleDropdown))
 
 					local function addOption(i, v)
 						if OptionObjs[v] then return end
@@ -5415,7 +5455,7 @@ end]]
 						local optionData = OptionObjs[v]
 						local option = optionData.Button
 
-						option.Activated:Connect(function()
+						option.Activated:Connect(UIThread.callback(function()
 							if OptionObjs[v] ~= optionData then return end
 							local isSelected = table.find(Selected, v) and true or false
 							local newSelected = not isSelected
@@ -5436,7 +5476,7 @@ end]]
 							task.spawn(function()
 								if revision == selectionRevision and callback then callback(result) end
 							end)
-						end)
+						end))
 
 						if dropped then
 							dropdown.Size = UDim2.new(1, 0, 0, CalculateDropdownSize())
@@ -5586,6 +5626,9 @@ end]]
 						MacLib.Options[Flag] = DropdownFunctions
 					end
 
+					for key, method in pairs(DropdownFunctions) do
+						if type(method) == "function" then DropdownFunctions[key] = UIThread.callback(method) end
+					end
 					return DropdownFunctions
 				end
 
@@ -6692,33 +6735,33 @@ end]]
 						UpdateRingFromHSV(hue, saturation)
 					end
 
-					wheel.InputBegan:Connect(function(input)
+					wheel.InputBegan:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							WheelDown = true
 							UpdateRing(Mouse.X, Mouse.Y)
 						end
-					end)
+					end))
 
-					slider.InputBegan:Connect(function(input)
+					slider.InputBegan:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							SlideDown = true
 							UpdateSlide(Mouse.X)
 						end
-					end)
+					end))
 
-					slider.InputEnded:Connect(function(input)
+					slider.InputEnded:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							SlideDown = false
 						end
-					end)
+					end))
 
-					wheel.InputEnded:Connect(function(input)
+					wheel.InputEnded:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							WheelDown = false
 						end
-					end)
+					end))
 
-					UserInputService.InputChanged:Connect(function(input)
+					UserInputService.InputChanged:Connect(UIThread.callback(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							if SlideDown then
 								UpdateSlide(Mouse.X)
@@ -6726,7 +6769,7 @@ end]]
 								UpdateRing(Mouse.X, Mouse.Y)
 							end
 						end
-					end)
+					end))
 
 					local function onFocusEnter(instance)
 						local placeholder = instance.Text
@@ -6734,27 +6777,27 @@ end]]
 						instance.PlaceholderText = placeholder
 					end
 
-					modifierInputs.Hex.FocusLost:Connect(updateFromHex)
-					modifierInputs.Red.FocusLost:Connect(updateFromRGB)
-					modifierInputs.Green.FocusLost:Connect(updateFromRGB)
-					modifierInputs.Blue.FocusLost:Connect(updateFromRGB)
-					modifierInputs.Alpha.FocusLost:Connect(update)
+					modifierInputs.Hex.FocusLost:Connect(UIThread.callback(updateFromHex))
+					modifierInputs.Red.FocusLost:Connect(UIThread.callback(updateFromRGB))
+					modifierInputs.Green.FocusLost:Connect(UIThread.callback(updateFromRGB))
+					modifierInputs.Blue.FocusLost:Connect(UIThread.callback(updateFromRGB))
+					modifierInputs.Alpha.FocusLost:Connect(UIThread.callback(update))
 
-					modifierInputs.Hex.Focused:Connect(function()
+					modifierInputs.Hex.Focused:Connect(UIThread.callback(function()
 						onFocusEnter(modifierInputs.Hex)
-					end)
-					modifierInputs.Red.Focused:Connect(function()
+					end))
+					modifierInputs.Red.Focused:Connect(UIThread.callback(function()
 						onFocusEnter(modifierInputs.Red)
-					end)
-					modifierInputs.Green.Focused:Connect(function()
+					end))
+					modifierInputs.Green.Focused:Connect(UIThread.callback(function()
 						onFocusEnter(modifierInputs.Green)
-					end)
-					modifierInputs.Blue.Focused:Connect(function()
+					end))
+					modifierInputs.Blue.Focused:Connect(UIThread.callback(function()
 						onFocusEnter(modifierInputs.Blue)
-					end)
-					modifierInputs.Alpha.Focused:Connect(function()
+					end))
+					modifierInputs.Alpha.Focused:Connect(UIThread.callback(function()
 						onFocusEnter(modifierInputs.Alpha)
-					end)
+					end))
 
 					local function makeCanvas()
 						local ColorPickerCanvas = Instance.new("CanvasGroup")
@@ -6803,10 +6846,10 @@ end]]
 						transition(false)
 					end
 
-					interact.MouseButton1Click:Connect(colorpickerIn)
+					interact.MouseButton1Click:Connect(UIThread.callback(colorpickerIn))
 
-					cancel.MouseButton1Click:Connect(colorpickerOut)
-					confirm.MouseButton1Click:Connect(function()
+					cancel.MouseButton1Click:Connect(UIThread.callback(colorpickerOut))
+					confirm.MouseButton1Click:Connect(UIThread.callback(function()
 						colorpickerOut()
 						local c = fromHSV(hue, saturation, value)
 						ColorpickerFunctions.Color = Color3.fromRGB(c.r * 255, c.g * 255, c.b * 255)
@@ -6823,7 +6866,7 @@ end]]
 								ColorpickerFunctions.Settings.Callback(ColorpickerFunctions.Color, isAlpha and ColorpickerFunctions.Alpha)
 							end)
 						end
-					end)
+					end))
 
 					updateFromSettings()
 
@@ -7193,9 +7236,9 @@ end]]
 
 			tabContext.selectFunc = function() SelectCurrentTab(true) end
 
-			tabSwitcher.MouseButton1Click:Connect(function()
+			tabSwitcher.MouseButton1Click:Connect(UIThread.callback(function()
 				SelectCurrentTab()
-			end)
+			end))
 
 			function TabFunctions:Select()
 				SelectCurrentTab()
@@ -7977,12 +8020,12 @@ end]]
 		style()
 
 		if interactable then
-			interactable.MouseButton1Click:Connect(function()
+			interactable.MouseButton1Click:Connect(UIThread.callback(function()
 				NotificationFunctions:Cancel()
 				if Settings.Callback then
 					task.spawn(Settings.Callback)
 				end
-			end)
+			end))
 		end
 
 		local AnimateNotification = task.spawn(function()
@@ -8252,21 +8295,21 @@ end]]
 				end
 			end
 
-			button.MouseButton1Click:Connect(function()
+			button.MouseButton1Click:Connect(UIThread.callback(function()
 				if dialogCanvas.GroupTransparency ~= 0 then return end
 				if v.Callback then
 					v.Callback()
 				end
 
 				dialogOut()
-			end)
+			end))
 
-			button.MouseEnter:Connect(function()
+			button.MouseEnter:Connect(UIThread.callback(function()
 				ChangeState("Hover")
-			end)
-			button.MouseLeave:Connect(function()
+			end))
+			button.MouseLeave:Connect(UIThread.callback(function()
 				ChangeState("Idle")
-			end)
+			end))
 		end
 
 		dialogIn()
@@ -8348,17 +8391,17 @@ end]]
 		WindowFunctions:SetState(not WindowFunctions:GetState())
 	end
 
-	UserInputService.InputEnded:Connect(function(inp, gpe)
+	UserInputService.InputEnded:Connect(UIThread.callback(function(inp, gpe)
 		if gpe then return end
 		if inp.KeyCode == MenuKeybind then
 			ToggleMenu()
 		end
-	end)
+	end))
 
-	minimize.MouseButton1Click:Connect(ToggleMenu)
+	minimize.MouseButton1Click:Connect(UIThread.callback(ToggleMenu))
 
-	lixLogo.MouseButton1Click:Connect(ToggleMenu)
-	exit.MouseButton1Click:Connect(function()
+	lixLogo.MouseButton1Click:Connect(UIThread.callback(ToggleMenu))
+	exit.MouseButton1Click:Connect(UIThread.callback(function()
 		WindowFunctions:Dialog({
 			Title = Settings.Title,
 			Description = "Are you sure you want to exit the menu? You will lose any unsaved configurations.",
@@ -8374,7 +8417,7 @@ end]]
 				}
 			}
 		})
-	end)
+	end))
 
 	function WindowFunctions:SetKeybind(Keycode)
 		MenuKeybind = Keycode
@@ -8594,7 +8637,7 @@ end]]
 	end
 
 	updateTimer()
-	_keyTimerConn = RunService.Heartbeat:Connect(updateTimer)
+	_keyTimerConn = RunService.Heartbeat:Connect(UIThread.callback(updateTimer))
 	end
 	function WindowFunctions:GetKeyTimer()
 		return _lastKeyExpiresAt, _lastKeyTier
@@ -8874,9 +8917,9 @@ end]]
 			pcall(function() guiParent = game:GetService("CoreGui") end)
 		end
 		compactGui.Parent = guiParent
-		macLib.Destroying:Connect(function()
+		macLib.Destroying:Connect(UIThread.callback(function()
 			if compactGui then compactGui:Destroy() end
-		end)
+		end))
 
 		local circleToggle = Instance.new("ImageButton")
 		circleToggle.Name = "CircleToggle"
@@ -8943,14 +8986,14 @@ end]]
 		end
 
 		WindowFunctions._ClampCircleToggle = bindOverlayDrag(circleToggle, "circle", ToggleMenu)
-		circleToggle.MouseEnter:Connect(function()
+		circleToggle.MouseEnter:Connect(UIThread.callback(function()
 			ThemeEditor.animate(appearance, circleStroke, TweenInfo.new(0.13), {Thickness = 3, Transparency = 0})
 			ThemeEditor.animate(appearance, circleIcon, TweenInfo.new(0.13), {Size = UDim2.fromScale(0.83, 0.83)})
-		end)
-		circleToggle.MouseLeave:Connect(function()
+		end))
+		circleToggle.MouseLeave:Connect(UIThread.callback(function()
 			ThemeEditor.animate(appearance, circleStroke, TweenInfo.new(0.13), {Thickness = 2, Transparency = 0.14})
 			ThemeEditor.animate(appearance, circleIcon, TweenInfo.new(0.13), {Size = UDim2.fromScale(0.77, 0.77)})
-		end)
+		end))
 		WindowFunctions.LogoToggleButton = circleToggle
 
 		local compactBar = ThemeEditor.frame(compactGui, "Watermark", 9)
@@ -9014,7 +9057,7 @@ end]]
 			end
 			if not compactBar.Visible then return end
 			local frames, elapsed = 0, 0
-			sample = RunService.RenderStepped:Connect(function(deltaTime)
+			sample = RunService.RenderStepped:Connect(UIThread.callback(function(deltaTime)
 				frames += 1
 				elapsed += deltaTime
 				if elapsed < 0.5 then return end
@@ -9024,11 +9067,11 @@ end]]
 				local time = DateTime.now():FormatLocalTime("HH:mm", "en-us")
 				stats.Text = string.format("%d FPS  ·  %s ms  ·  %s", fps, latency, time)
 				frames, elapsed = 0, 0
-			end)
+			end))
 		end
-		compactGui.Destroying:Connect(function()
+		compactGui.Destroying:Connect(UIThread.callback(function()
 			if sample then sample:Disconnect() end
-		end)
+		end))
 		appearance.paintOverlay()
 		appearance.showWatermark()
 
@@ -9038,10 +9081,10 @@ end]]
 
 	local camera = Workspace and Workspace.CurrentCamera
 	if camera then
-		_viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		_viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(UIThread.callback(function()
 			applyAutomaticScale()
 			task.defer(clampWindowToViewport)
-		end)
+		end))
 	end
 
 	return WindowFunctions
