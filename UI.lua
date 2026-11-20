@@ -4938,6 +4938,7 @@ end]]
 					local Selected = {}
 					local OptionObjs = {}
 					local dropped = false
+					local selectionRevision = 0
 
 					local dropdown = Instance.new("Frame")
 					dropdown.Name = "Dropdown"
@@ -5065,6 +5066,7 @@ end]]
 
 					local function updateHeaderLayout()
 						local h = HEADER_H()
+						interact.Size = UDim2.new(1, 0, 0, h)
 						dropdownFrame.Position = UDim2.new(0, 0, 0, h)
 						dropdownFrame.Size = UDim2.new(1, 0, 1, -h)
 						if not dropped then
@@ -5248,10 +5250,7 @@ end]]
 							checkmark.TextTransparency = 1
 						end
 
-						if Settings.Required and #Selected == 0 and not State then
-							refreshPreview()
-							return
-						end
+						DropdownFunctions.Value = Settings.Multi and table.clone(Selected) or Selected[1]
 
 						if #Selected > 0 then
 							dropdownName.Text = DropdownFunctions.Settings.Name .. " • " .. table.concat(Selected, ", ")
@@ -5297,6 +5296,7 @@ end]]
 					interact.MouseButton1Click:Connect(ToggleDropdown)
 
 					local function addOption(i, v)
+						if OptionObjs[v] then return end
 						local option = Instance.new("TextButton")
 						option.Name = "Option"
 						option.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
@@ -5413,19 +5413,13 @@ end]]
 							})
 						}
 
-						local isSelected = false
-						if DropdownFunctions.Settings.Default then
-							if DropdownFunctions.Settings.Multi then
-								isSelected = table.find(DropdownFunctions.Settings.Default, v) and true or false
-							else
-								isSelected = (DropdownFunctions.Settings.Default == i) and true or false
-							end
-						end
-						Toggle(v, isSelected)
+						Toggle(v, table.find(Selected, v) ~= nil)
 
-						local option = OptionObjs[v].Button
+						local optionData = OptionObjs[v]
+						local option = optionData.Button
 
 						option.MouseButton1Click:Connect(function()
+							if OptionObjs[v] ~= optionData then return end
 							local isSelected = table.find(Selected, v) and true or false
 							local newSelected = not isSelected
 
@@ -5435,21 +5429,15 @@ end]]
 
 							Toggle(v, newSelected)
 
+							selectionRevision = selectionRevision + 1
+							local revision, callback = selectionRevision, Settings.Callback
+							local result = Selected[1]
+							if Settings.Multi then
+								result = {}
+								for _, name in ipairs(Selected) do result[name] = true end
+							end
 							task.spawn(function()
-								if DropdownFunctions.Settings.Multi then
-									local Return = {}
-									for _, opt in ipairs(Selected) do
-										Return[opt] = true
-									end
-									if DropdownFunctions.Settings.Callback then
-										DropdownFunctions.Settings.Callback(Return)
-									end
-
-								else
-									if newSelected and DropdownFunctions.Settings.Callback then
-										DropdownFunctions.Settings.Callback(Selected[1] or nil)
-									end
-								end
+								if revision == selectionRevision and callback then callback(result) end
 							end)
 						end)
 
@@ -5470,72 +5458,81 @@ end]]
 					function DropdownFunctions:SetVisibility(State)
 						dropdown.Visible = State
 					end
-					function DropdownFunctions:UpdateSelection(newSelection)
-						if not newSelection then return end
-
-						for option, _ in pairs(OptionObjs) do
-							Toggle(option, false)
-						end
-
-						local selectedOptions = {}
-						if type(newSelection) == "number" then
-							for option, data in pairs(OptionObjs) do
-								local isSelected = data.Index == newSelection
-								Toggle(option, isSelected)
-								if isSelected then
-									table.insert(selectedOptions, option)
-								end
-							end
-						elseif type(newSelection) == "string" then
-							for option, data in pairs(OptionObjs) do
-								local isSelected = option == newSelection
-								Toggle(option, isSelected)
-								if isSelected then
-									table.insert(selectedOptions, option)
-								end
-							end
-						elseif type(newSelection) == "table" then
-							for option, _ in pairs(OptionObjs) do
-								local isSelected = table.find(newSelection, option) ~= nil
-								Toggle(option, isSelected)
-								if isSelected then
-									table.insert(selectedOptions, option)
-								end
-							end
-						end
-
-						if #selectedOptions > 0 then
-							dropdownName.Text = DropdownFunctions.Settings.Name .. " • " .. table.concat(selectedOptions, ", ")
-						else
-							dropdownName.Text = DropdownFunctions.Settings.Name .. "..."
-						end
-
-						if DropdownFunctions.Settings.Callback then
-							if DropdownFunctions.Settings.Multi then
-								local Return = {}
-								for _, opt in ipairs(selectedOptions) do
-									Return[opt] = true
-								end
-								DropdownFunctions.Settings.Callback(Return)
-							else
-								DropdownFunctions.Settings.Callback(selectedOptions[1] or nil)
-							end
-						end
+					function DropdownFunctions:UpdateSelection(newSelection, silent)
+					    if newSelection == nil then return end
+					    -- Copy before clearing: callers may pass this dropdown's own Value table.
+					    local selectedOptions, seen = {}, {}
+					    local function add(value)
+					        if type(value) == "number" then
+					            for name, data in pairs(OptionObjs) do
+					                if data.Index == value then value = name; break end
+					            end
+					        end
+					        if OptionObjs[value] and not seen[value] then
+					            selectedOptions[#selectedOptions + 1], seen[value] = value, true
+					        end
+					    end
+					    if type(newSelection) == "table" then
+					        for _, value in ipairs(newSelection) do add(value) end
+					        for name, state in pairs(newSelection) do
+					            if type(name) == "string" and state == true then add(name) end
+					        end
+					    else
+					        add(newSelection)
+					    end
+					    if Settings.Required and #selectedOptions == 0 then
+					        for _, name in ipairs(Selected) do add(name) end
+					        if #selectedOptions == 0 then
+					            local first, index
+					            for name, data in pairs(OptionObjs) do
+					                if not index or data.Index < index then first, index = name, data.Index end
+					            end
+					            if first then add(first) end
+					        end
+					    end
+					    if not Settings.Multi and #selectedOptions > 1 then selectedOptions = {selectedOptions[1]} end
+					    selectionRevision = selectionRevision + 1
+					    for name in pairs(OptionObjs) do Toggle(name, false) end
+					    for _, name in ipairs(selectedOptions) do Toggle(name, true) end
+					    DropdownFunctions.Value = Settings.Multi and table.clone(Selected) or Selected[1]
+					    dropdownName.Text = #Selected > 0 and (Settings.Name .. " • " .. table.concat(Selected, ", ")) or (Settings.Name .. "...")
+					    refreshPreview()
+					    if not silent and Settings.Callback then
+					        if Settings.Multi then
+					            local result = {}
+					            for _, name in ipairs(Selected) do result[name] = true end
+					            Settings.Callback(result)
+					        else
+					            Settings.Callback(Selected[1])
+					        end
+					    end
 					end
 					function DropdownFunctions:InsertOptions(newOptions)
 						if not newOptions then return end
-						DropdownFunctions.Settings.Options = newOptions
-						for i, v in pairs(newOptions) do
-							addOption(i, v)
+						local nextIndex = 0
+						for _, data in pairs(OptionObjs) do nextIndex = math.max(nextIndex, data.Index) end
+						for _, value in pairs(newOptions) do
+							if not OptionObjs[value] then
+								nextIndex = nextIndex + 1
+								addOption(nextIndex, value)
+							end
 						end
+						local options = {}
+						for name, data in pairs(OptionObjs) do options[#options + 1] = {name = name, index = data.Index} end
+						table.sort(options, function(a,b) return a.index < b.index end)
+						DropdownFunctions.Settings.Options = {}
+						for _, option in ipairs(options) do table.insert(DropdownFunctions.Settings.Options, option.name) end
 					end
 					function DropdownFunctions:ClearOptions()
+						selectionRevision = selectionRevision + 1
 						for _, optionData in pairs(OptionObjs) do
 							optionData.Button:Destroy()
 						end
 						OptionObjs = {}
 						Selected = {}
-						DropdownFunctions.Value = nil
+						DropdownFunctions.Settings.Options = {}
+						DropdownFunctions.Value = Settings.Multi and {} or nil
+						dropdownName.Text = Settings.Name .. "..."
 						refreshPreview()
 
 						if dropped then
@@ -5571,6 +5568,8 @@ end]]
 							end
 						end
 
+						self:UpdateSelection(Selected, true)
+
 						if dropped then
 							dropdown.Size = UDim2.new(1, 0, 0, CalculateDropdownSize())
 						end
@@ -5580,6 +5579,10 @@ end]]
 						return OptionObjs[optionName] ~= nil
 					end
 
+					function DropdownFunctions:IsOpen()
+						return dropped
+					end
+					DropdownFunctions:UpdateSelection(Settings.Default or {}, true)
 					registerElement(Settings.Name, dropdown)
 
 					if Flag then
