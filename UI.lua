@@ -5056,6 +5056,8 @@ end]]
 					dropdownFrame.Position = UDim2.new(0, 0, 0, HEADER_H())
 					dropdownFrame.Size = UDim2.new(1, 0, 1, -HEADER_H())
 					dropdownFrame.Visible = false
+					dropdownFrame.Active = true
+					dropdownFrame.ZIndex = 2
 					dropdownFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 					dropdownFrame.CanvasSize = UDim2.new()
 					dropdownFrame.ScrollBarThickness = 3
@@ -5275,25 +5277,20 @@ end]]
 							Rotation = isDropdownOpen and -90 or 0
 						})
 
+						-- Connect before playing, including when reduced motion finishes immediately.
+						local completed
+						completed = dropTween.Completed:Connect(function()
+							if completed then completed:Disconnect() end
+							if not isDropdownOpen then dropdownFrame.Visible = false end
+							db = false
+						end)
+						dropped = isDropdownOpen
+						if isDropdownOpen then dropdownFrame.Visible = true end
 						dropTween:Play()
 						iconTween:Play()
-
-						if isDropdownOpen then
-							dropdownFrame.Visible = true
-							dropTween.Completed:Connect(function()
-								db = false
-							end)
-						else
-							dropTween.Completed:Connect(function()
-								dropdownFrame.Visible = false
-								db = false
-							end)
-						end
-
-						dropped = isDropdownOpen
 					end
 
-					interact.MouseButton1Click:Connect(ToggleDropdown)
+					interact.Activated:Connect(ToggleDropdown)
 
 					local function addOption(i, v)
 						if OptionObjs[v] then return end
@@ -5418,7 +5415,7 @@ end]]
 						local optionData = OptionObjs[v]
 						local option = optionData.Button
 
-						option.MouseButton1Click:Connect(function()
+						option.Activated:Connect(function()
 							if OptionObjs[v] ~= optionData then return end
 							local isSelected = table.find(Selected, v) and true or false
 							local newSelected = not isSelected
