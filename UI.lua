@@ -7388,13 +7388,7 @@ end]]
 
 	local _isLoadingUISettings = false
 
-	local function SaveGlobalUISettings()
-		if _isLoadingUISettings then return end
-		if isStudio or type(writefile) ~= "function" then return false end
-		if type(isfolder) == "function" and type(makefolder) == "function" then
-			local ok, exists = pcall(isfolder, "LixHub")
-			if ok and not exists then pcall(makefolder, "LixHub") end
-		end
+	local function CaptureUISettings()
 		local data = { objects = {}, customThemes = ThemeEditor.writeThemes(appearance.custom) }
 		if appearance.draftEdited then
 			data.activeAppearance = ThemeEditor.writeTheme(appearance.draft)
@@ -7436,6 +7430,24 @@ end]]
 		if opt and not disableAutoExecute then table.insert(data.objects, { type="Toggle", flag="__maclib_autoexecute", state=opt.State or false }) end
 		opt = MacLib.Options["__maclib_autorejoin"]
 		if opt then table.insert(data.objects, { type="Toggle", flag="__maclib_autorejoin", state=opt.State or false }) end
+		return data
+	end
+
+	function WindowFunctions:GetUISettings()
+		return CaptureUISettings()
+	end
+
+	local function SaveGlobalUISettings()
+		if _isLoadingUISettings then return end
+		local data = CaptureUISettings()
+		if type(Settings.OnUISettingsChanged) == "function" then
+			Settings.OnUISettingsChanged(data)
+		end
+		if isStudio or type(writefile) ~= "function" then return false end
+		if type(isfolder) == "function" and type(makefolder) == "function" then
+			local ok, exists = pcall(isfolder, "LixHub")
+			if ok and not exists then pcall(makefolder, "LixHub") end
+		end
 		local ok, encoded = pcall(HttpService.JSONEncode, HttpService, data)
 		if not ok then return false end
 		local saved, result = pcall(writefile, GLOBAL_UI_PATH, encoded)
@@ -7445,12 +7457,16 @@ end]]
 	appearance.persistUI = SaveGlobalUISettings
 
 	local function LoadGlobalUISettings()
-		if type(readfile) ~= "function" then return end
-		local raw
-		local readOk = pcall(function() raw = readfile(GLOBAL_UI_PATH) end)
-		if not readOk or type(raw) ~= "string" or raw == "" then return end
-		local ok, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
-		if not ok or type(decoded) ~= "table" then return end
+		local decoded = Settings.UISettings
+		if type(decoded) ~= "table" then
+			if type(readfile) ~= "function" then return end
+			local raw
+			local readOk = pcall(function() raw = readfile(GLOBAL_UI_PATH) end)
+			if not readOk or type(raw) ~= "string" or raw == "" then return end
+			local ok, data = pcall(HttpService.JSONDecode, HttpService, raw)
+			if not ok or type(data) ~= "table" then return end
+			decoded = data
+		end
 		if type(decoded.windowSize) == "table" then
 			local width, height = tonumber(decoded.windowSize.width), tonumber(decoded.windowSize.height)
 			if width and width == width and height and height == height then
