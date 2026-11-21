@@ -4979,6 +4979,7 @@ end]]
 					local OptionObjs = {}
 					local dropped = false
 					local selectionRevision = 0
+					local materializeOptions, releaseOptions, materializing
 
 					local dropdown = Instance.new("Frame")
 					dropdown.Name = "Dropdown"
@@ -5089,6 +5090,7 @@ end]]
 
 					local dropdownFrame = Instance.new("ScrollingFrame")
 					dropdownFrame.Name = "DropdownFrame"
+					dropdownFrame.Parent = dropdown
 					dropdownFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 					dropdownFrame.BackgroundTransparency = 1
 					dropdownFrame.BorderSizePixel = 0
@@ -5190,7 +5192,7 @@ end]]
 
 						for _, v in pairs(dropdownFrame:GetChildren()) do
 							if not v:IsA("UIComponent") and v.Visible then
-								totalHeight += v.AbsoluteSize.Y
+								totalHeight += Settings.Lazy and v.Size.Y.Offset or v.AbsoluteSize.Y
 								visibleCount += 1
 							end
 						end
@@ -5203,11 +5205,11 @@ end]]
 					local function findOption()
 						local searchTerm = searchBox.Text:lower()
 
-						for _, v in pairs(OptionObjs) do
-							local optionText = v.NameLabel.Text:lower()
+						for name, v in pairs(OptionObjs) do
+							local optionText = tostring(name):lower()
 							local isVisible = optionText:find(searchTerm, 1, true) ~= nil
 
-							if v.Button.Visible ~= isVisible then
+							if v.Button and v.Button.Visible ~= isVisible then
 								v.Button.Visible = isVisible
 							end
 						end
@@ -5237,70 +5239,40 @@ end]]
 						waitTime = 1
 					}
 
-					local function Toggle(optionName, State)
-						local option = OptionObjs[optionName]
+					local function paintOption(option, selected)
+                        if not option or not option.Button then return end
+                        local checkmark, label = option.Checkmark, option.NameLabel
+                        Tween(checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
+                            Size = UDim2.new(checkmark.Size.X.Scale, selected and tweensettings.checkSizeIncrease or tweensettings.checkSizeDecrease,
+                                checkmark.Size.Y.Scale, checkmark.Size.Y.Offset)
+                        }):Play()
+                        Tween(label, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
+                            TextTransparency = selected and tweensettings.transparencyIn or tweensettings.transparencyOut
+                        }):Play()
+                        checkmark.TextTransparency = selected and 0 or 1
+                    end
 
-						if not option then return end
-
-						local checkmark = option.Checkmark
-						local optionNameLabel = option.NameLabel
-
-						if State then
-							if DropdownFunctions.Settings.Multi then
-								if not table.find(Selected, optionName) then
-									table.insert(Selected, optionName)
-									DropdownFunctions.Value = Selected
-								end
-							else
-								for name, opt in pairs(OptionObjs) do
-									if name ~= optionName then
-										Tween(opt.Checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-											Size = UDim2.new(opt.Checkmark.Size.X.Scale, tweensettings.checkSizeDecrease, opt.Checkmark.Size.Y.Scale, opt.Checkmark.Size.Y.Offset)
-										}):Play()
-										Tween(opt.NameLabel, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-											TextTransparency = tweensettings.transparencyOut
-										}):Play()
-										opt.Checkmark.TextTransparency = 1
-									end
-								end
-								Selected = {optionName}
-								DropdownFunctions.Value = Selected[1]
-							end
-							Tween(checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-								Size = UDim2.new(checkmark.Size.X.Scale, tweensettings.checkSizeIncrease, checkmark.Size.Y.Scale, checkmark.Size.Y.Offset)
-							}):Play()
-							Tween(optionNameLabel, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-								TextTransparency = tweensettings.transparencyIn
-							}):Play()
-							checkmark.TextTransparency = 0
-						else
-							if DropdownFunctions.Settings.Multi then
-								local idx = table.find(Selected, optionName)
-								if idx then
-									table.remove(Selected, idx)
-								end
-							elseif Selected[1] == optionName then
-								Selected = {}
-								DropdownFunctions.Value = nil
-							end
-							Tween(checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-								Size = UDim2.new(checkmark.Size.X.Scale, tweensettings.checkSizeDecrease, checkmark.Size.Y.Scale, checkmark.Size.Y.Offset)
-							}):Play()
-							Tween(optionNameLabel, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-								TextTransparency = tweensettings.transparencyOut
-							}):Play()
-							checkmark.TextTransparency = 1
-						end
-
-						DropdownFunctions.Value = Settings.Multi and table.clone(Selected) or Selected[1]
-
-						if #Selected > 0 then
-							dropdownName.Text = DropdownFunctions.Settings.Name .. " • " .. table.concat(Selected, ", ")
-						else
-							dropdownName.Text = DropdownFunctions.Settings.Name .. "..."
-						end
-						refreshPreview()
-					end
+                    local function Toggle(optionName, State)
+                        local option = OptionObjs[optionName]
+                        if not option then return end
+                        if State then
+                            if Settings.Multi then
+                                if not table.find(Selected, optionName) then table.insert(Selected, optionName) end
+                            else
+                                for name, other in pairs(OptionObjs) do
+                                    if name ~= optionName then paintOption(other, false) end
+                                end
+                                Selected = {optionName}
+                            end
+                        else
+                            local index = table.find(Selected, optionName)
+                            if index then table.remove(Selected, index) end
+                        end
+                        paintOption(option, State)
+                        DropdownFunctions.Value = Settings.Multi and table.clone(Selected) or Selected[1]
+                        dropdownName.Text = #Selected > 0 and (Settings.Name .. " • " .. table.concat(Selected, ", ")) or (Settings.Name .. "...")
+                        refreshPreview()
+                    end
 
 					local db = false
 
@@ -5308,6 +5280,7 @@ end]]
 						if db then return end
 						db = true
 						local isDropdownOpen = not dropped
+						if isDropdownOpen and materializeOptions then materializeOptions() end
 						local targetSize = isDropdownOpen and UDim2.new(1, 0, 0, CalculateDropdownSize()) or UDim2.new(1, 0, 0, HEADER_H())
 
 						local dropTween = Tween(dropdown, TweenInfo.new(0.2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
@@ -5321,7 +5294,10 @@ end]]
 						local completed
 						completed = dropTween.Completed:Connect(UIThread.callback(function()
 							if completed then completed:Disconnect() end
-							if not isDropdownOpen then dropdownFrame.Visible = false end
+							if not isDropdownOpen then
+                                dropdownFrame.Visible = false
+                                if releaseOptions then releaseOptions() end
+                            end
 							db = false
 						end))
 						dropped = isDropdownOpen
@@ -5332,8 +5308,11 @@ end]]
 
 					interact.Activated:Connect(UIThread.callback(ToggleDropdown))
 
-					local function addOption(i, v)
-						if OptionObjs[v] then return end
+					local function addOption(i, v, createRow)
+                        local existing = OptionObjs[v]
+                        if existing and (existing.Button or not createRow) then return end
+                        if not existing then OptionObjs[v] = {Index = i} end
+                        if Settings.Lazy and not dropped and not createRow and not materializing then return end
 						local option = Instance.new("TextButton")
 						option.Name = "Option"
 						option.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
@@ -5416,6 +5395,7 @@ end]]
 						checkmark.Size = UDim2.fromOffset(-10, 0)
 						checkmark.Parent = option
 
+						option.Visible = tostring(v):lower():find(searchBox.Text:lower(), 1, true) ~= nil
 						option.Parent = dropdownFrame
 
 						dropdownFrame.Parent = dropdown
@@ -5424,30 +5404,6 @@ end]]
 							Button = option,
 							NameLabel = optionName,
 							Checkmark = checkmark
-						}
-
-						local tweensettings = {
-							duration = 0.2,
-							easingStyle = Enum.EasingStyle.Quint,
-							transparencyIn = 0.2,
-							transparencyOut = 0.5,
-							checkSizeIncrease = 12,
-							checkSizeDecrease = -optionUIListLayout.Padding.Offset,
-							waitTime = 1
-						}
-						local tweens = {
-							checkIn = Tween(checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle), {
-								Size = UDim2.new(checkmark.Size.X.Scale, tweensettings.checkSizeIncrease, checkmark.Size.Y.Scale, checkmark.Size.Y.Offset)
-							}),
-							checkOut = Tween(checkmark, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle),{
-								Size = UDim2.new(checkmark.Size.X.Scale, tweensettings.checkSizeDecrease, checkmark.Size.Y.Scale, checkmark.Size.Y.Offset)
-							}),
-							nameIn = Tween(optionName, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle),{
-								TextTransparency = tweensettings.transparencyIn
-							}),
-							nameOut = Tween(optionName, TweenInfo.new(tweensettings.duration, tweensettings.easingStyle),{
-								TextTransparency = tweensettings.transparencyOut
-							})
 						}
 
 						Toggle(v, table.find(Selected, v) ~= nil)
@@ -5482,6 +5438,52 @@ end]]
 							dropdown.Size = UDim2.new(1, 0, 0, CalculateDropdownSize())
 						end
 					end
+
+                    materializeOptions = function()
+                        if not Settings.Lazy then return end
+                        materializing = true
+                        -- Snapshot metadata because addOption replaces records with live rows.
+                        local pending = {}
+                        for name, data in pairs(OptionObjs) do
+                            if not data.Button then pending[#pending + 1] = {name = name, index = data.Index} end
+                        end
+                        table.sort(pending, function(a, b) return a.index < b.index end)
+                        local sliceAt = os.clock()
+                        for _, data in ipairs(pending) do
+                            local current = OptionObjs[data.name]
+                            if current and not current.Button and current.Index == data.index then
+                                addOption(data.index, data.name, true)
+                            end
+                            if type(task.wait) == "function" and os.clock() - sliceAt >= 0.006 then
+                                task.wait()
+                                sliceAt = os.clock()
+                                if not dropdown.Parent then materializing = false; return end
+                            end
+                        end
+                        local searchTerm = searchBox.Text:lower()
+                        for name, data in pairs(OptionObjs) do
+                            if data.Button then data.Button.Visible = tostring(name):lower():find(searchTerm, 1, true) ~= nil end
+                        end
+                        materializing = false
+                    end
+
+                    releaseOptions = function()
+                        if not Settings.Lazy then return end
+                        local pending, sliceAt = {}, os.clock()
+                        for name, data in pairs(OptionObjs) do
+                            if data.Button then pending[#pending + 1] = {name = name, data = data} end
+                        end
+                        for _, entry in ipairs(pending) do
+                            if OptionObjs[entry.name] == entry.data then
+                                entry.data.Button:Destroy()
+                                OptionObjs[entry.name] = {Index = entry.data.Index}
+                            end
+                            if type(task.wait) == "function" and os.clock() - sliceAt >= 0.006 then
+                                task.wait()
+                                sliceAt = os.clock()
+                            end
+                        end
+                    end
 
 					if DropdownFunctions.Settings.Options then
 						for i, v in pairs(DropdownFunctions.Settings.Options) do
@@ -5563,7 +5565,7 @@ end]]
 					function DropdownFunctions:ClearOptions()
 						selectionRevision = selectionRevision + 1
 						for _, optionData in pairs(OptionObjs) do
-							optionData.Button:Destroy()
+							if optionData.Button then optionData.Button:Destroy() end
 						end
 						OptionObjs = {}
 						Selected = {}
@@ -5599,7 +5601,7 @@ end]]
 									end
 								end
 
-								optionData.Button:Destroy()
+								if optionData.Button then optionData.Button:Destroy() end
 
 								OptionObjs[optionName] = nil
 							end
@@ -5617,7 +5619,7 @@ end]]
 					end
 
 					function DropdownFunctions:IsOpen()
-						return dropped
+						return dropped or Settings.Lazy == true and db
 					end
 					DropdownFunctions:UpdateSelection(Settings.Default or {}, true)
 					registerElement(Settings.Name, dropdown)
